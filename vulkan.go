@@ -16,7 +16,7 @@ type Vulkan struct {
 	Surface   vk.Surface
 	Queue     vk.Queue
 	Device    vk.Device
-	dbg       vk.DebugReportCallbackFunc
+	dbg       vk.DebugReportCallback
 }
 
 type VulkanGfxPipelineInfo struct {
@@ -341,7 +341,7 @@ func getPhysicalDevices(instance vk.Instance) ([]vk.PhysicalDevice, error) {
 	}
 	return gpuList, nil
 }
-func CreateGraphicsPipeline(device vk.Device, displaySize vk.Extent2D, renderPass vk.RenderPass) (VulkanGfxPipelineInfo, error) {
+func NewGraphicsPipeline(device vk.Device, displaySize vk.Extent2D, renderPass vk.RenderPass) (VulkanGfxPipelineInfo, error) {
 	var gfxPipeline VulkanGfxPipelineInfo
 
 	// Phase 1: vk.CreatePipelineLayout
