@@ -30,8 +30,73 @@ func SetDebug(state bool) {
 	debug = state
 }
 
+func getDeviceExtensions(gpu vk.PhysicalDevice) (extNames []string) {
+	var deviceExtLen uint32
+	ret := vk.EnumerateDeviceExtensionProperties(gpu, "", &deviceExtLen, nil)
+	check(ret, "vk.EnumerateDeviceExtensionProperties")
+	deviceExt := make([]vk.ExtensionProperties, deviceExtLen)
+	ret = vk.EnumerateDeviceExtensionProperties(gpu, "", &deviceExtLen, deviceExt)
+	check(ret, "vk.EnumerateDeviceExtensionProperties")
+	for _, ext := range deviceExt {
+		ext.Deref()
+		extNames = append(extNames,
+			vk.ToString(ext.ExtensionName[:]))
+	}
+	return extNames
+}
+
+func getInstanceExtensions() (extNames []string) {
+	var instanceExtLen uint32
+	ret := vk.EnumerateInstanceExtensionProperties("", &instanceExtLen, nil)
+	check(ret, "vk.EnumerateInstanceExtensionProperties")
+	instanceExt := make([]vk.ExtensionProperties, instanceExtLen)
+	ret = vk.EnumerateInstanceExtensionProperties("", &instanceExtLen, instanceExt)
+	check(ret, "vk.EnumerateInstanceExtensionProperties")
+	for _, ext := range instanceExt {
+		ext.Deref()
+		extNames = append(extNames,
+			vk.ToString(ext.ExtensionName[:]))
+	}
+	return extNames
+}
+
+func getPhysicalDevices(instance vk.Instance) ([]vk.PhysicalDevice, error) {
+	var gpuCount uint32
+	err := vk.Error(vk.EnumeratePhysicalDevices(instance, &gpuCount, nil))
+	if err != nil {
+		err = fmt.Errorf("vk.EnumeratePhysicalDevices failed with %s", err)
+		return nil, err
+	}
+	if gpuCount == 0 {
+		err = fmt.Errorf("getPhysicalDevice: no GPUs found on the system")
+		return nil, err
+	}
+	gpuList := make([]vk.PhysicalDevice, gpuCount)
+	err = vk.Error(vk.EnumeratePhysicalDevices(instance, &gpuCount, gpuList))
+	if err != nil {
+		err = fmt.Errorf("vk.EnumeratePhysicalDevices failed with %s", err)
+		return nil, err
+	}
+	return gpuList, nil
+}
+
+func dbgCallbackFunc(flags vk.DebugReportFlags, objectType vk.DebugReportObjectType,
+	object uint64, location uint, messageCode int32, pLayerPrefix string,
+	pMessage string, pUserData unsafe.Pointer) vk.Bool32 {
+
+	switch {
+	case flags&vk.DebugReportFlags(vk.DebugReportErrorBit) != 0:
+		log.Printf("[ERROR %d] %s on layer %s", messageCode, pMessage, pLayerPrefix)
+	case flags&vk.DebugReportFlags(vk.DebugReportWarningBit) != 0:
+		log.Printf("[WARN %d] %s on layer %s", messageCode, pMessage, pLayerPrefix)
+	default:
+		log.Printf("[WARN] unknown debug message %d (layer %s)", messageCode, pLayerPrefix)
+	}
+	return vk.Bool32(vk.False)
+}
+
 // NewDevice create the main Vulkan object holding references to all parts of the Vulkan API
-func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc func(instance vk.Instance, window uintptr) vk.Surface, window uintptr) (Vulkan, error) {
+func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc func(instance vk.Instance, window uintptr) (vk.Surface, error), window uintptr) (Vulkan, error) {
 
 	var appInfo = &vk.ApplicationInfo{
 		SType:              vk.StructureTypeApplicationInfo,
@@ -83,12 +148,10 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 		vk.InitInstance(vo.Instance) // used by MoltenVK
 	}
 
-	// Phase 2: vk.CreateAndroidSurface with vk.AndroidSurfaceCreateInfo
-
-	vo.Surface = createSurfaceFunc(vo.Instance, window)
+	vo.Surface, err = createSurfaceFunc(vo.Instance, window) // Android use a different way to get surface
 	if err != nil {
 		vk.DestroyInstance(vo.Instance, nil)
-		err = fmt.Errorf("vkCreateWindowSurface failed with %s", err)
+		err = fmt.Errorf("create surface failed with %s", err)
 		return vo, err
 	}
 	var gpuDevices []vk.PhysicalDevice
@@ -280,69 +343,22 @@ func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r Vulkan
 	return true
 }
 
-func getInstanceExtensions() (extNames []string) {
-	var instanceExtLen uint32
-	ret := vk.EnumerateInstanceExtensionProperties("", &instanceExtLen, nil)
-	check(ret, "vk.EnumerateInstanceExtensionProperties")
-	instanceExt := make([]vk.ExtensionProperties, instanceExtLen)
-	ret = vk.EnumerateInstanceExtensionProperties("", &instanceExtLen, instanceExt)
-	check(ret, "vk.EnumerateInstanceExtensionProperties")
-	for _, ext := range instanceExt {
-		ext.Deref()
-		extNames = append(extNames,
-			vk.ToString(ext.ExtensionName[:]))
-	}
-	return extNames
-}
+func DestroyInOrder(v *Vulkan, s *VulkanSwapchainInfo, r *VulkanRenderInfo, b *VulkanBufferInfo, gfx *VulkanGfxPipelineInfo) {
 
-func getDeviceExtensions(gpu vk.PhysicalDevice) (extNames []string) {
-	var deviceExtLen uint32
-	ret := vk.EnumerateDeviceExtensionProperties(gpu, "", &deviceExtLen, nil)
-	check(ret, "vk.EnumerateDeviceExtensionProperties")
-	deviceExt := make([]vk.ExtensionProperties, deviceExtLen)
-	ret = vk.EnumerateDeviceExtensionProperties(gpu, "", &deviceExtLen, deviceExt)
-	check(ret, "vk.EnumerateDeviceExtensionProperties")
-	for _, ext := range deviceExt {
-		ext.Deref()
-		extNames = append(extNames,
-			vk.ToString(ext.ExtensionName[:]))
-	}
-	return extNames
-}
+	vk.FreeCommandBuffers(v.Device, r.cmdPool, uint32(len(r.cmdBuffers)), r.cmdBuffers)
+	r.cmdBuffers = nil
 
-func dbgCallbackFunc(flags vk.DebugReportFlags, objectType vk.DebugReportObjectType,
-	object uint64, location uint, messageCode int32, pLayerPrefix string,
-	pMessage string, pUserData unsafe.Pointer) vk.Bool32 {
+	vk.DestroyCommandPool(v.Device, r.cmdPool, nil)
+	vk.DestroyRenderPass(v.Device, r.RenderPass, nil)
 
-	switch {
-	case flags&vk.DebugReportFlags(vk.DebugReportErrorBit) != 0:
-		log.Printf("[ERROR %d] %s on layer %s", messageCode, pMessage, pLayerPrefix)
-	case flags&vk.DebugReportFlags(vk.DebugReportWarningBit) != 0:
-		log.Printf("[WARN %d] %s on layer %s", messageCode, pMessage, pLayerPrefix)
-	default:
-		log.Printf("[WARN] unknown debug message %d (layer %s)", messageCode, pLayerPrefix)
+	s.Destroy()
+	gfx.Destroy()
+	b.Destroy()
+	vk.DestroyDevice(v.Device, nil)
+	if v.dbg != vk.NullDebugReportCallback {
+		vk.DestroyDebugReportCallback(v.Instance, v.dbg, nil)
 	}
-	return vk.Bool32(vk.False)
-}
-
-func getPhysicalDevices(instance vk.Instance) ([]vk.PhysicalDevice, error) {
-	var gpuCount uint32
-	err := vk.Error(vk.EnumeratePhysicalDevices(instance, &gpuCount, nil))
-	if err != nil {
-		err = fmt.Errorf("vk.EnumeratePhysicalDevices failed with %s", err)
-		return nil, err
-	}
-	if gpuCount == 0 {
-		err = fmt.Errorf("getPhysicalDevice: no GPUs found on the system")
-		return nil, err
-	}
-	gpuList := make([]vk.PhysicalDevice, gpuCount)
-	err = vk.Error(vk.EnumeratePhysicalDevices(instance, &gpuCount, gpuList))
-	if err != nil {
-		err = fmt.Errorf("vk.EnumeratePhysicalDevices failed with %s", err)
-		return nil, err
-	}
-	return gpuList, nil
+	vk.DestroyInstance(v.Instance, nil)
 }
 
 func NewGraphicsPipeline(device vk.Device, displaySize vk.Extent2D, renderPass vk.RenderPass) (VulkanGfxPipelineInfo, error) {
@@ -524,22 +540,4 @@ func (gfx *VulkanGfxPipelineInfo) Destroy() {
 	vk.DestroyPipeline(gfx.device, gfx.pipeline, nil)
 	vk.DestroyPipelineCache(gfx.device, gfx.cache, nil)
 	vk.DestroyPipelineLayout(gfx.device, gfx.layout, nil)
-}
-
-func DestroyInOrder(v *Vulkan, s *VulkanSwapchainInfo, r *VulkanRenderInfo, b *VulkanBufferInfo, gfx *VulkanGfxPipelineInfo) {
-
-	vk.FreeCommandBuffers(v.Device, r.cmdPool, uint32(len(r.cmdBuffers)), r.cmdBuffers)
-	r.cmdBuffers = nil
-
-	vk.DestroyCommandPool(v.Device, r.cmdPool, nil)
-	vk.DestroyRenderPass(v.Device, r.RenderPass, nil)
-
-	s.Destroy()
-	gfx.Destroy()
-	b.Destroy()
-	vk.DestroyDevice(v.Device, nil)
-	if v.dbg != vk.NullDebugReportCallback {
-		vk.DestroyDebugReportCallback(v.Instance, v.dbg, nil)
-	}
-	vk.DestroyInstance(v.Instance, nil)
 }
