@@ -35,13 +35,13 @@ func NewGraphicsPipeline(device vk.Device, displaySize vk.Extent2D, renderPass v
 
 	// Phase 2: load shaders and specify shader stages
 
-	vertexShader, err := LoadShader(device, "tri-vert.spv")
+	vertexShader, err := LoadShader(device, "shaders/tri-vert.spv")
 	if err != nil { // err has enough info
 		return gfxPipeline, err
 	}
 	defer vk.DestroyShaderModule(device, vertexShader, nil)
 
-	fragmentShader, err := LoadShader(device, "tri-frag.spv")
+	fragmentShader, err := LoadShader(device, "shaders/tri-frag.spv")
 	if err != nil { // err has enough info
 		return gfxPipeline, err
 	}

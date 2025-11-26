@@ -38,7 +38,7 @@ func LoadShader(device vk.Device, name string) (vk.ShaderModule, error) {
 
 	shaderModuleCreateInfo := vk.ShaderModuleCreateInfo{
 		SType:    vk.StructureTypeShaderModuleCreateInfo,
-		CodeSize: uint(len(data)),
+		CodeSize: uint64(len(data)),
 		PCode:    repackUint32(data),
 	}
 	err = vk.Error(vk.CreateShaderModule(device, &shaderModuleCreateInfo, nil, &module))
