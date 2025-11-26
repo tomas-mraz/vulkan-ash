@@ -30,6 +30,14 @@ func SetDebug(state bool) {
 	debug = state
 }
 
+// NewExtentSize needs for Wayland
+func NewExtentSize(width, height int) vk.Extent2D {
+	return vk.Extent2D{
+		Width:  uint32(width),
+		Height: uint32(height),
+	}
+}
+
 func getDeviceExtensions(gpu vk.PhysicalDevice) (extNames []string) {
 	var deviceExtLen uint32
 	ret := vk.EnumerateDeviceExtensionProperties(gpu, "", &deviceExtLen, nil)

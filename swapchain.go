@@ -20,18 +20,18 @@ type VulkanSwapchainInfo struct {
 	DisplayViews []vk.ImageView
 }
 
-func NewSwapchain(device vk.Device, gpu vk.PhysicalDevice, surface vk.Surface) (VulkanSwapchainInfo, error) {
+func NewSwapchain(device vk.Device, gpu vk.PhysicalDevice, surface vk.Surface, windowSize vk.Extent2D) (VulkanSwapchainInfo, error) {
 	//gpu := v.gpuDevices[0]
 
 	// Phase 1: vk.GetPhysicalDeviceSurfaceCapabilities
 	//			vk.GetPhysicalDeviceSurfaceFormats
 
-	var s VulkanSwapchainInfo
+	var swap VulkanSwapchainInfo
 	var surfaceCapabilities vk.SurfaceCapabilities
 	err := vk.Error(vk.GetPhysicalDeviceSurfaceCapabilities(gpu, surface, &surfaceCapabilities))
 	if err != nil {
 		err = fmt.Errorf("vk.GetPhysicalDeviceSurfaceCapabilities failed with %s", err)
-		return s, err
+		return swap, err
 	}
 	var formatCount uint32
 	vk.GetPhysicalDeviceSurfaceFormats(gpu, surface, &formatCount, nil)
@@ -43,60 +43,68 @@ func NewSwapchain(device vk.Device, gpu vk.PhysicalDevice, surface vk.Surface) (
 	chosenFormat := -1
 	for i := 0; i < int(formatCount); i++ {
 		formats[i].Deref()
-		if formats[i].Format == vk.FormatB8g8r8a8Unorm ||
-			formats[i].Format == vk.FormatR8g8b8a8Unorm {
+		if formats[i].Format == vk.FormatB8g8r8a8Unorm || formats[i].Format == vk.FormatR8g8b8a8Unorm {
 			chosenFormat = i
 			break
 		}
 	}
 	if chosenFormat < 0 {
 		err := fmt.Errorf("vk.GetPhysicalDeviceSurfaceFormats not found suitable format")
-		return s, err
+		return swap, err
 	}
 
 	// Phase 2: vk.CreateSwapchain
 	//			create a swapchain with supported capabilities and format
 
 	surfaceCapabilities.Deref()
-	s.DisplaySize = surfaceCapabilities.CurrentExtent
-	s.DisplaySize.Deref()
-	s.DisplayFormat = formats[chosenFormat].Format
-	queueFamily := []uint32{0}
-	swapchainCreateInfo := vk.SwapchainCreateInfo{
-		SType:           vk.StructureTypeSwapchainCreateInfo,
-		Surface:         surface,
-		MinImageCount:   surfaceCapabilities.MinImageCount,
-		ImageFormat:     formats[chosenFormat].Format,
-		ImageColorSpace: formats[chosenFormat].ColorSpace,
-		ImageExtent:     surfaceCapabilities.CurrentExtent,
-		ImageUsage:      vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit),
-		PreTransform:    vk.SurfaceTransformIdentityBit,
+	fmt.Println("NewSwapchain surfaceCapabilities", surfaceCapabilities)
+	swap.DisplayFormat = formats[chosenFormat].Format
 
-		ImageArrayLayers:      1,
-		ImageSharingMode:      vk.SharingModeExclusive,
-		QueueFamilyIndexCount: 1,
-		PQueueFamilyIndices:   queueFamily,
-		PresentMode:           vk.PresentModeFifo,
-		OldSwapchain:          vk.NullSwapchain,
-		Clipped:               vk.False,
+	surfaceCapabilities.CurrentExtent.Deref()
+	if surfaceCapabilities.CurrentExtent.Width == vk.MaxUint32 {
+		// Wayland specific https://docs.vulkan.org/spec/latest/chapters/VK_KHR_surface/wsi.html#vkCreateAndroidSurfaceKHR
+		swap.DisplaySize = windowSize
+		log.Println("[wayland specific] surface extent size is not set, using window size")
+	} else {
+		swap.DisplaySize = surfaceCapabilities.CurrentExtent
 	}
-	s.Swapchains = make([]vk.Swapchain, 1)
-	err = vk.Error(vk.CreateSwapchain(device, &swapchainCreateInfo, nil, &(s.Swapchains[0])))
+	log.Println("[INFO] display size", windowSize.Width, windowSize.Height)
+
+	swapchainCreateInfo := vk.SwapchainCreateInfo{
+		SType:            vk.StructureTypeSwapchainCreateInfo,
+		Surface:          surface,
+		MinImageCount:    surfaceCapabilities.MinImageCount,
+		ImageFormat:      formats[chosenFormat].Format,
+		ImageColorSpace:  formats[chosenFormat].ColorSpace,
+		ImageExtent:      swap.DisplaySize,
+		ImageUsage:       vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit),
+		PreTransform:     vk.SurfaceTransformIdentityBit,
+		CompositeAlpha:   vk.CompositeAlphaOpaqueBit,
+		ImageArrayLayers: 1,
+		ImageSharingMode: vk.SharingModeExclusive,
+		PresentMode:      vk.PresentModeFifo,
+		OldSwapchain:     vk.NullSwapchain,
+		Clipped:          vk.False,
+	}
+	var swapchain vk.Swapchain
+	err = vk.Error(vk.CreateSwapchain(device, &swapchainCreateInfo, nil, &swapchain))
 	if err != nil {
 		err = fmt.Errorf("vk.CreateSwapchain failed with %s", err)
-		return s, err
+		return swap, err
 	}
-	s.SwapchainLen = make([]uint32, 1)
-	err = vk.Error(vk.GetSwapchainImages(device, s.DefaultSwapchain(), &(s.SwapchainLen[0]), nil))
+	swap.Swapchains = []vk.Swapchain{swapchain}
+	swap.SwapchainLen = make([]uint32, 1)
+
+	err = vk.Error(vk.GetSwapchainImages(device, swap.DefaultSwapchain(), &(swap.SwapchainLen[0]), nil))
 	if err != nil {
 		err = fmt.Errorf("vk.GetSwapchainImages failed with %s", err)
-		return s, err
+		return swap, err
 	}
 	for i := range formats {
 		formats[i].Free()
 	}
-	s.Device = device
-	return s, nil
+	swap.Device = device
+	return swap, nil
 }
 
 func (s *VulkanSwapchainInfo) DefaultSwapchain() vk.Swapchain {
