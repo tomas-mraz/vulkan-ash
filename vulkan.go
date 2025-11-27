@@ -11,11 +11,11 @@ import (
 var debug = false
 
 type Vulkan struct {
-	GpuDevice vk.PhysicalDevice
+	Device    vk.Device
 	Instance  vk.Instance
 	Surface   vk.Surface
+	GpuDevice vk.PhysicalDevice
 	Queue     vk.Queue
-	Device    vk.Device
 	dbg       vk.DebugReportCallback
 }
 
@@ -82,15 +82,12 @@ func getPhysicalDevices(instance vk.Instance) ([]vk.PhysicalDevice, error) {
 	var aaa vk.PhysicalDeviceProperties
 	vk.GetPhysicalDeviceProperties(gpuList[0], &aaa)
 	aaa.Deref()
-	fmt.Println("Used GPU:", getCString(aaa.DeviceName[:]), "---")
+	fmt.Println("Used GPU:", getCString(aaa.DeviceName[:]))
 
 	return gpuList, nil
 }
 
-func dbgCallbackFunc(flags vk.DebugReportFlags, objectType vk.DebugReportObjectType,
-	object uint64, location uint, messageCode int32, pLayerPrefix string,
-	pMessage string, pUserData unsafe.Pointer) vk.Bool32 {
-
+func dbgCallbackFunc(flags vk.DebugReportFlags, objectType vk.DebugReportObjectType, object uint64, location uint64, messageCode int32, pLayerPrefix string, pMessage string, pUserData unsafe.Pointer) vk.Bool32 {
 	switch {
 	case flags&vk.DebugReportFlags(vk.DebugReportErrorBit) != 0:
 		log.Printf("[ERROR %d] %s on layer %s", messageCode, pMessage, pLayerPrefix)
@@ -128,14 +125,8 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 	// these layers must be included in APK,
 	// see Android.mk and ValidationLayers.mk
 	instanceLayers := []string{
-		// "VK_LAYER_GOOGLE_threading\x00",
-		// "VK_LAYER_LUNARG_parameter_validation\x00",
-		// "VK_LAYER_LUNARG_object_tracker\x00",
-		// "VK_LAYER_LUNARG_core_validation\x00",
+		"VK_LAYER_KHRONOS_validation\x00",
 		// "VK_LAYER_LUNARG_api_dump\x00",
-		// "VK_LAYER_LUNARG_image\x00",
-		// "VK_LAYER_LUNARG_swapchain\x00",
-		// "VK_LAYER_GOOGLE_unique_objects\x00",
 	}
 
 	instanceCreateInfo := vk.InstanceCreateInfo{
@@ -178,14 +169,8 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 	// these layers must be included in APK,
 	// see Android.mk and ValidationLayers.mk
 	deviceLayers := []string{
-		// "VK_LAYER_GOOGLE_threading\x00",
-		// "VK_LAYER_LUNARG_parameter_validation\x00",
-		// "VK_LAYER_LUNARG_object_tracker\x00",
-		// "VK_LAYER_LUNARG_core_validation\x00",
+		//"VK_LAYER_KHRONOS_validation\x00",
 		// "VK_LAYER_LUNARG_api_dump\x00",
-		// "VK_LAYER_LUNARG_image\x00",
-		// "VK_LAYER_LUNARG_swapchain\x00",
-		// "VK_LAYER_GOOGLE_unique_objects\x00",
 	}
 
 	queueCreateInfos := []vk.DeviceQueueCreateInfo{{
@@ -224,9 +209,9 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 		// Phase 4: vk.CreateDebugReportCallback
 
 		dbgCreateInfo := vk.DebugReportCallbackCreateInfo{
-			SType: vk.StructureTypeDebugReportCallbackCreateInfo,
-			Flags: vk.DebugReportFlags(vk.DebugReportErrorBit | vk.DebugReportWarningBit),
-			//PfnCallback: dbgCallbackFunc,  //FIXME
+			SType:       vk.StructureTypeDebugReportCallbackCreateInfo,
+			Flags:       vk.DebugReportFlags(vk.DebugReportErrorBit | vk.DebugReportWarningBit),
+			PfnCallback: dbgCallbackFunc,
 		}
 		var dbg vk.DebugReportCallback
 		err = vk.Error(vk.CreateDebugReportCallback(vo.Instance, &dbgCreateInfo, nil, &dbg))
