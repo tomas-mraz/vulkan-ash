@@ -7,10 +7,10 @@ import (
 )
 
 func NewAndroidSurface(instance vk.Instance, windowPtr uintptr) (vk.Surface, error) {
-	surface := vk.Surface{}
+	var surface vk.Surface
 	err := vk.Error(vk.CreateWindowSurface(instance, windowPtr, nil, &surface))
 	if err != nil {
-		return vk.Surface{}, err
+		return nil, err
 	}
 	return surface, nil
 }
