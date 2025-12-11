@@ -2,7 +2,7 @@ package asch
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	vk "github.com/tomas-mraz/vulkan"
 )
@@ -38,7 +38,7 @@ func NewSwapchain(device vk.Device, gpu vk.PhysicalDevice, surface vk.Surface, w
 	formats := make([]vk.SurfaceFormat, formatCount)
 	vk.GetPhysicalDeviceSurfaceFormats(gpu, surface, &formatCount, formats)
 
-	log.Println("[INFO] got", formatCount, "physical device surface formats")
+	slog.Debug(fmt.Sprintf("got %d physical device surface formats", formatCount))
 
 	chosenFormat := -1
 	for i := 0; i < int(formatCount); i++ {
@@ -57,18 +57,18 @@ func NewSwapchain(device vk.Device, gpu vk.PhysicalDevice, surface vk.Surface, w
 	//			create a swapchain with supported capabilities and format
 
 	surfaceCapabilities.Deref()
-	fmt.Println("NewSwapchain surfaceCapabilities", surfaceCapabilities)
+	slog.Debug(fmt.Sprintf("NewSwapchain surfaceCapabilities %v", surfaceCapabilities))
 	swap.DisplayFormat = formats[chosenFormat].Format
 
 	surfaceCapabilities.CurrentExtent.Deref()
 	if surfaceCapabilities.CurrentExtent.Width == vk.MaxUint32 {
 		// Wayland specific https://docs.vulkan.org/spec/latest/chapters/VK_KHR_surface/wsi.html#vkCreateAndroidSurfaceKHR
 		swap.DisplaySize = windowSize
-		log.Println("[wayland specific] surface extent size is not set, using window size")
+		slog.Debug("[wayland specific] surface extent size is not set, using window size")
 	} else {
 		swap.DisplaySize = surfaceCapabilities.CurrentExtent
 	}
-	log.Println("[INFO] display size", windowSize.Width, windowSize.Height)
+	slog.Debug(fmt.Sprintf("final display size is %d x %d", windowSize.Width, windowSize.Height))
 
 	swapchainCreateInfo := vk.SwapchainCreateInfo{
 		SType:            vk.StructureTypeSwapchainCreateInfo,

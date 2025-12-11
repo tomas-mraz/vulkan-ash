@@ -2,7 +2,7 @@ package asch
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"unsafe"
 
 	vk "github.com/tomas-mraz/vulkan"
@@ -82,7 +82,7 @@ func getPhysicalDevices(instance vk.Instance) ([]vk.PhysicalDevice, error) {
 	var aaa vk.PhysicalDeviceProperties
 	vk.GetPhysicalDeviceProperties(gpuList[0], &aaa)
 	aaa.Deref()
-	fmt.Println("Used GPU:", getCString(aaa.DeviceName[:]))
+	slog.Debug("Used GPU: " + getCString(aaa.DeviceName[:]))
 
 	return gpuList, nil
 }
@@ -90,11 +90,11 @@ func getPhysicalDevices(instance vk.Instance) ([]vk.PhysicalDevice, error) {
 func dbgCallbackFunc(flags vk.DebugReportFlags, objectType vk.DebugReportObjectType, object uint64, location uint64, messageCode int32, pLayerPrefix string, pMessage string, pUserData unsafe.Pointer) vk.Bool32 {
 	switch {
 	case flags&vk.DebugReportFlags(vk.DebugReportErrorBit) != 0:
-		log.Printf("[ERROR %d] %s on layer %s", messageCode, pMessage, pLayerPrefix)
+		slog.Error(fmt.Sprintf("[%d] %s on layer %s", messageCode, pMessage, pLayerPrefix))
 	case flags&vk.DebugReportFlags(vk.DebugReportWarningBit) != 0:
-		log.Printf("[WARN %d] %s on layer %s", messageCode, pMessage, pLayerPrefix)
+		slog.Warn(fmt.Sprintf("[%d] %s on layer %s", messageCode, pMessage, pLayerPrefix))
 	default:
-		log.Printf("[WARN] unknown debug message %d (layer %s)", messageCode, pLayerPrefix)
+		slog.Warn(fmt.Sprintf("unknown debug message %d (layer %s)", messageCode, pLayerPrefix))
 	}
 	return vk.Bool32(vk.False)
 }
@@ -113,7 +113,7 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 	// Phase 1: vk.CreateInstance with vk.InstanceCreateInfo
 
 	existingExtensions := getInstanceExtensions()
-	log.Println("[INFO] Instance extensions:", existingExtensions)
+	slog.Debug(fmt.Sprintf("Instance extensions: %v", existingExtensions))
 
 	// instanceExtensions := vk.GetRequiredInstanceExtensions()
 	if debug {
@@ -161,7 +161,7 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 	}
 	vo.GpuDevice = gpuDevices[0] //FIXME select GPU device
 	existingExtensions = getDeviceExtensions(vo.GpuDevice)
-	log.Println("[INFO] Device extensions:", existingExtensions)
+	slog.Debug(fmt.Sprintf("Device extensions: %v", existingExtensions))
 
 	// Phase 3: vk.CreateDevice with vk.DeviceCreateInfo (a logical device)
 
@@ -217,7 +217,7 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 		err = vk.Error(vk.CreateDebugReportCallback(vo.Instance, &dbgCreateInfo, nil, &dbg))
 		if err != nil {
 			err = fmt.Errorf("vk.CreateDebugReportCallback failed with %s", err)
-			log.Println("[WARN]", err)
+			slog.Warn(err.Error())
 			return vo, nil
 		}
 		vo.dbg = dbg
@@ -287,7 +287,7 @@ func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r Vulkan
 		vk.MaxUint64, r.DefaultSemaphore(), vk.NullFence, &nextIdx))
 	if err != nil {
 		err = fmt.Errorf("vk.AcquireNextImage failed with %s", err)
-		log.Println("[WARN]", err)
+		slog.Warn(err.Error())
 		return false
 	}
 
@@ -309,7 +309,7 @@ func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r Vulkan
 	err = vk.Error(vk.QueueSubmit(queue, 1, submitInfo, r.DefaultFence()))
 	if err != nil {
 		err = fmt.Errorf("vk.QueueSubmit failed with %s", err)
-		log.Println("[WARN]", err)
+		slog.Warn(err.Error())
 		return false
 	}
 
@@ -317,7 +317,7 @@ func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r Vulkan
 	err = vk.Error(vk.WaitForFences(device, 1, r.fences, vk.True, timeoutNano))
 	if err != nil {
 		err = fmt.Errorf("vk.WaitForFences failed with %s", err)
-		log.Println("[WARN]", err)
+		slog.Warn(err.Error())
 		return false
 	}
 
@@ -333,7 +333,7 @@ func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r Vulkan
 	err = vk.Error(vk.QueuePresent(queue, &presentInfo))
 	if err != nil {
 		err = fmt.Errorf("vk.QueuePresent failed with %s", err)
-		log.Println("[WARN]", err)
+		slog.Warn(err.Error())
 		return false
 	}
 	return true
