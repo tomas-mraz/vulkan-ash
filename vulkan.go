@@ -159,6 +159,7 @@ func NewDevice(appName string, instanceExtensions []string, createSurfaceFunc fu
 		vk.DestroyInstance(vo.Instance, nil)
 		return vo, err
 	}
+	slog.Debug(fmt.Sprintf("Found %d GPUs named %v", len(gpuDevices), gpuDevices))
 	vo.GpuDevice = gpuDevices[0] //FIXME select GPU device
 	existingExtensions = getDeviceExtensions(vo.GpuDevice)
 	slog.Debug(fmt.Sprintf("Device extensions: %v", existingExtensions))
