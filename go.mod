@@ -1,4 +1,4 @@
-module github.com/tomas-mraz/vulkan-asch
+module github.com/tomas-mraz/vulkan-ash
 
 go 1.24.10
 
