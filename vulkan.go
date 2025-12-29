@@ -280,6 +280,7 @@ func VulkanStart(device vk.Device, swapchain *VulkanSwapchainInfo, r *VulkanRend
 
 func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r VulkanRenderInfo) bool {
 	var nextIdx uint32
+	var err error
 
 	// Phase 1: vk.AcquireNextImage
 	// 			get the framebuffer index we should draw in
@@ -287,11 +288,12 @@ func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r Vulkan
 	//			N.B. non-infinite timeouts may be not yet implemented
 	//			by your Vulkan driver
 
-	err := vk.Error(vk.AcquireNextImage(device, s.DefaultSwapchain(),
-		vk.MaxUint64, r.DefaultSemaphore(), vk.NullFence, &nextIdx))
-	if err != nil {
-		err = fmt.Errorf("vk.AcquireNextImage failed with %s", err)
-		slog.Warn(err.Error())
+	ret := vk.AcquireNextImage(device, s.DefaultSwapchain(), vk.MaxUint64, r.DefaultSemaphore(), vk.NullFence, &nextIdx)
+	if ret == vk.Suboptimal || ret == vk.ErrorOutOfDate {
+		slog.Warn("vk.AcquireNextImage returned Suboptimal or ErrorOutOfDate")
+	}
+	if !(ret == vk.Success || ret == vk.Suboptimal) {
+		slog.Error(vk.Error(ret).Error())
 		return false
 	}
 
@@ -334,10 +336,12 @@ func DrawFrame(device vk.Device, queue vk.Queue, s VulkanSwapchainInfo, r Vulkan
 		PSwapchains:    s.Swapchains,
 		PImageIndices:  imageIndices,
 	}
-	err = vk.Error(vk.QueuePresent(queue, &presentInfo))
-	if err != nil {
-		err = fmt.Errorf("vk.QueuePresent failed with %s", err)
-		slog.Warn(err.Error())
+	ret2 := vk.QueuePresent(queue, &presentInfo)
+	if ret2 == vk.Suboptimal || ret2 == vk.ErrorOutOfDate {
+		slog.Error("vk.QueuePresent returned Suboptimal or ErrorOutOfDate")
+	}
+	if ret2 != vk.Success {
+		slog.Error(vk.Error(ret2).Error())
 		return false
 	}
 	return true
