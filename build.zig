@@ -15,6 +15,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const zigimg_dep = b.dependency("zigimg", .{
+        .target = target,
+        .optimize = optimize,
+    });
 
     const ash_module = b.addModule("ash", .{
         .root_source_file = b.path("src/root.zig"),
@@ -24,6 +28,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "glfw", .module = glfw_dep.module("glfw") },
             .{ .name = "vulkan", .module = vulkan },
+            .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
         },
     });
 
