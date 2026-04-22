@@ -17,6 +17,7 @@ pub const Swapchain = struct {
 
     surface_format: vk.SurfaceFormatKHR,
     extent: vk.Extent2D,
+    pre_transform: vk.SurfaceTransformFlagsKHR,
     handle: vk.SwapchainKHR,
 
     swap_images: []SwapImage,
@@ -176,6 +177,7 @@ pub const Swapchain = struct {
             .allocator = allocator,
             .surface_format = surface_format,
             .extent = actual_extent,
+            .pre_transform = capabilities.current_transform,
             .handle = handle,
             .swap_images = swap_images,
             .image_index = result.image_index,
@@ -189,6 +191,18 @@ pub const Swapchain = struct {
         }
         self.allocator.free(self.swap_images);
         self.manager.device.?.destroySemaphore(self.next_image_acquired, null);
+    }
+
+    pub fn imageCount(self: *const Swapchain) usize {
+        return self.swap_images.len;
+    }
+
+    pub fn defaultSwapchain(self: *const Swapchain) vk.SwapchainKHR {
+        return self.handle;
+    }
+
+    pub fn defaultSwapchainLen(self: *const Swapchain) u32 {
+        return @intCast(self.swap_images.len);
     }
 };
 

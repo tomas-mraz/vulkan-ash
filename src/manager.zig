@@ -31,13 +31,15 @@ pub const DeviceOptions = struct {
     api_version: u32 = vk.makeApiVersion(0, 1, 0, 0).toU32(),
 };
 
+pub const InstanceProcAddr = *const fn (instance: vk.Instance, proc_name: [*:0]const u8) vk.PfnVoidFunction;
+
 pub const SurfaceFactory = struct {
     context: ?*anyopaque = null,
     callback: *const fn (context: ?*anyopaque, instance: Instance) anyerror!vk.SurfaceKHR,
 };
 
 pub const InitOptions = struct {
-    instance_proc_addr: *const fn (instance: vk.Instance, proc_name: [*:0]const u8) vk.PfnVoidFunction,
+    instance_proc_addr: InstanceProcAddr,
     surface_factory: ?SurfaceFactory = null,
     device: DeviceOptions = .{},
 };
