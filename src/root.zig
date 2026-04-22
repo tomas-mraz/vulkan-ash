@@ -1,5 +1,6 @@
 pub const glfw = @import("glfw");
 pub const vk = @import("vulkan");
+pub const math = @import("math.zig");
 
 pub const CommandContext = @import("command_context.zig").CommandContext;
 pub const DesktopHost = @import("desktop_host.zig").DesktopHost;

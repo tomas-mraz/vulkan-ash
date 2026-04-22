@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const registry_path: std.Build.LazyPath = .{
-        .cwd_relative = "/usr/share/vulkan/registry/vk.xml",
+        .cwd_relative = "C:/Programs/VulkanSDK/1.4.341.1/share/vulkan/registry/vk.xml",
     };
 
     const vulkan = b.dependency("vulkan_zig", .{
