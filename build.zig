@@ -3,9 +3,11 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const sdk_root = b.graph.environ_map.get("VULKAN_SDK") orelse
+        @panic("VULKAN_SDK is not set; point it to the Vulkan SDK root containing registry/vk.xml");
 
     const registry_path: std.Build.LazyPath = .{
-        .cwd_relative = "C:/Programs/VulkanSDK/1.4.341.1/share/vulkan/registry/vk.xml",
+        .cwd_relative = b.fmt("{s}/registry/vk.xml", .{sdk_root}),
     };
 
     const vulkan = b.dependency("vulkan_zig", .{
