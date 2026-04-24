@@ -34,6 +34,66 @@ pub fn multiply(a: *const Mat4, b: *const Mat4) Mat4 {
     return result;
 }
 
+pub fn translation(x: f32, y: f32, z: f32) Mat4 {
+    return .{
+        .{ 1, 0, 0, 0 },
+        .{ 0, 1, 0, 0 },
+        .{ 0, 0, 1, 0 },
+        .{ x, y, z, 1 },
+    };
+}
+
+pub fn scaling(sx: f32, sy: f32, sz: f32) Mat4 {
+    return .{
+        .{ sx, 0, 0, 0 },
+        .{ 0, sy, 0, 0 },
+        .{ 0, 0, sz, 0 },
+        .{ 0, 0, 0, 1 },
+    };
+}
+
+/// Rotation around arbitrary unit axis by `angle` radians.
+pub fn rotationAxis(axis_x: f32, axis_y: f32, axis_z: f32, angle: f32) Mat4 {
+    var x = axis_x;
+    var y = axis_y;
+    var z = axis_z;
+    const len_sq = x * x + y * y + z * z;
+    if (len_sq > 0) {
+        const inv = 1.0 / @sqrt(len_sq);
+        x *= inv;
+        y *= inv;
+        z *= inv;
+    }
+    const c = @cos(angle);
+    const s = @sin(angle);
+    const one_c = 1 - c;
+    return .{
+        .{ c + x * x * one_c, x * y * one_c + z * s, x * z * one_c - y * s, 0 },
+        .{ y * x * one_c - z * s, c + y * y * one_c, y * z * one_c + x * s, 0 },
+        .{ z * x * one_c + y * s, z * y * one_c - x * s, c + z * z * one_c, 0 },
+        .{ 0, 0, 0, 1 },
+    };
+}
+
+/// Construct a rotation matrix from a quaternion (x, y, z, w).
+pub fn fromQuaternion(qx: f32, qy: f32, qz: f32, qw: f32) Mat4 {
+    const xx = qx * qx;
+    const yy = qy * qy;
+    const zz = qz * qz;
+    const xy = qx * qy;
+    const xz = qx * qz;
+    const yz = qy * qz;
+    const wx = qw * qx;
+    const wy = qw * qy;
+    const wz = qw * qz;
+    return .{
+        .{ 1 - 2 * (yy + zz), 2 * (xy + wz), 2 * (xz - wy), 0 },
+        .{ 2 * (xy - wz), 1 - 2 * (xx + zz), 2 * (yz + wx), 0 },
+        .{ 2 * (xz + wy), 2 * (yz - wx), 1 - 2 * (xx + yy), 0 },
+        .{ 0, 0, 0, 1 },
+    };
+}
+
 pub fn rotateY(base: *const Mat4, angle: f32) Mat4 {
     const s = @sin(angle);
     const c = @cos(angle);
