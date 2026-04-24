@@ -24,6 +24,7 @@ pub const SwapchainOptions = @import("swapchain.zig").SwapchainOptions;
 pub const SyncInfo = @import("sync.zig").SyncInfo;
 pub const TextureOptions = @import("image_resource.zig").TextureOptions;
 pub const checkDeviceExtensions = @import("manager.zig").checkDeviceExtensions;
+pub const createTextureFromEncoded = @import("image_resource.zig").createTextureFromEncoded;
 pub const createTextureFromFile = @import("image_resource.zig").createTextureFromFile;
 pub const createTextureFromRgba = @import("image_resource.zig").createTextureFromRgba;
 pub const newExtentSize = @import("manager.zig").newExtentSize;

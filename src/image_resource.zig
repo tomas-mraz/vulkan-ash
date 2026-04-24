@@ -68,7 +68,17 @@ pub fn createTextureFromFile(
     );
     defer allocator.free(encoded);
 
-    var image = try zigimg.Image.fromMemory(allocator, encoded);
+    return createTextureFromEncoded(allocator, manager, cmd_ctx, encoded, options);
+}
+
+pub fn createTextureFromEncoded(
+    allocator: Allocator,
+    manager: *const Manager,
+    cmd_ctx: *CommandContext,
+    encoded_bytes: []const u8,
+    options: TextureOptions,
+) !ImageResource {
+    var image = try zigimg.Image.fromMemory(allocator, encoded_bytes);
     defer image.deinit(allocator);
 
     if (image.pixelFormat() != .rgba32) {

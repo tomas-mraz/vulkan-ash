@@ -4,7 +4,14 @@ const vk = @import("vulkan");
 const Allocator = std.mem.Allocator;
 const Manager = @import("manager.zig").Manager;
 
-pub const SwapchainOptions = struct {};
+pub const PresentModePreference = enum {
+    mailbox,
+    fifo,
+};
+
+pub const SwapchainOptions = struct {
+    present_mode: PresentModePreference = .mailbox,
+};
 
 pub const Swapchain = struct {
     pub const PresentState = enum {
@@ -23,9 +30,19 @@ pub const Swapchain = struct {
     swap_images: []SwapImage,
     image_index: u32,
     next_image_acquired: vk.Semaphore,
+    opts: SwapchainOptions = .{},
 
     pub fn init(manager: *const Manager, allocator: Allocator, extent: vk.Extent2D) !Swapchain {
-        return try initRecycle(manager, allocator, extent, .null_handle);
+        return try initWithOptions(manager, allocator, extent, .{});
+    }
+
+    pub fn initWithOptions(
+        manager: *const Manager,
+        allocator: Allocator,
+        extent: vk.Extent2D,
+        opts: SwapchainOptions,
+    ) !Swapchain {
+        return try initRecycle(manager, allocator, extent, .null_handle, opts);
     }
 
     pub fn deinit(self: Swapchain) void {
@@ -45,7 +62,7 @@ pub const Swapchain = struct {
         self.deinitExceptSwapchain();
 
         self.handle = .null_handle;
-        self.* = initRecycle(manager, allocator, new_extent, old_handle) catch |err| switch (err) {
+        self.* = initRecycle(manager, allocator, new_extent, old_handle, self.opts) catch |err| switch (err) {
             error.SwapchainCreationFailed => {
                 manager.device.?.destroySwapchainKHR(old_handle, null);
                 return err;
@@ -106,6 +123,7 @@ pub const Swapchain = struct {
         allocator: Allocator,
         extent: vk.Extent2D,
         old_handle: vk.SwapchainKHR,
+        opts: SwapchainOptions,
     ) !Swapchain {
         const instance = manager.instance orelse return error.InstanceNotInitialized;
         const device = manager.device orelse return error.DeviceNotInitialized;
@@ -117,7 +135,7 @@ pub const Swapchain = struct {
         }
 
         const surface_format = try findSurfaceFormat(instance, manager.gpu, manager.surface, allocator);
-        const present_mode = try findPresentMode(instance, manager.gpu, manager.surface, allocator);
+        const present_mode = try findPresentMode(instance, manager.gpu, manager.surface, allocator, opts.present_mode);
 
         var image_count = capabilities.min_image_count + 1;
         if (capabilities.max_image_count > 0) {
@@ -182,6 +200,7 @@ pub const Swapchain = struct {
             .swap_images = swap_images,
             .image_index = result.image_index,
             .next_image_acquired = next_image_acquired,
+            .opts = opts,
         };
     }
 
@@ -318,15 +337,18 @@ fn findPresentMode(
     gpu: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
     allocator: Allocator,
+    preferred_mode: PresentModePreference,
 ) !vk.PresentModeKHR {
     const present_modes = try instance.getPhysicalDeviceSurfacePresentModesAllocKHR(gpu, surface, allocator);
     defer allocator.free(present_modes);
 
-    const preferred = [_]vk.PresentModeKHR{ .mailbox_khr, .immediate_khr };
-    for (preferred) |mode| {
-        if (std.mem.indexOfScalar(vk.PresentModeKHR, present_modes, mode) != null) {
-            return mode;
-        }
+    switch (preferred_mode) {
+        .mailbox => {
+            if (std.mem.indexOfScalar(vk.PresentModeKHR, present_modes, .mailbox_khr) != null) {
+                return .mailbox_khr;
+            }
+        },
+        .fifo => {},
     }
 
     return .fifo_khr;

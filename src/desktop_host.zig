@@ -16,10 +16,12 @@ pub const DesktopHost = struct {
     width: u32,
     height: u32,
     title: [:0]const u8,
+    fullscreen: bool = false,
     window: ?glfw.Window = null,
     events: ArrayListUnmanaged(HostEvent) = .empty,
     closed: bool = false,
     glfw_initialized: bool = false,
+    surface_announced: bool = false,
 
     pub fn init(allocator: Allocator, width: u32, height: u32, title: [:0]const u8) DesktopHost {
         return .{
@@ -27,6 +29,16 @@ pub const DesktopHost = struct {
             .width = width,
             .height = height,
             .title = title,
+        };
+    }
+
+    pub fn initFullscreen(allocator: Allocator, title: [:0]const u8) DesktopHost {
+        return .{
+            .allocator = allocator,
+            .width = 0,
+            .height = 0,
+            .title = title,
+            .fullscreen = true,
         };
     }
 
@@ -51,23 +63,60 @@ pub const DesktopHost = struct {
             self.glfw_initialized = false;
         }
 
-        const window = glfw.Window.create(self.width, self.height, self.title, null, null, .{
+        var hints: glfw.Window.Hints = .{
             .client_api = .no_api,
-            .resizable = true,
-        }) orelse return error.WindowCreationFailed;
+            .resizable = !self.fullscreen,
+        };
+
+        var monitor: ?glfw.Monitor = null;
+        if (self.fullscreen) {
+            const primary = glfw.Monitor.getPrimary() orelse return error.NoPrimaryMonitor;
+            const mode = primary.getVideoMode() orelse return error.NoVideoMode;
+            self.width = mode.getWidth();
+            self.height = mode.getHeight();
+            hints.red_bits = @intCast(mode.getRedBits());
+            hints.green_bits = @intCast(mode.getGreenBits());
+            hints.blue_bits = @intCast(mode.getBlueBits());
+            hints.refresh_rate = @intCast(mode.getRefreshRate());
+            hints.auto_iconify = false;
+            monitor = primary;
+        }
+
+        const window = glfw.Window.create(self.width, self.height, self.title, monitor, null, hints) orelse return error.WindowCreationFailed;
         errdefer window.destroy();
 
         self.window = window;
         self.closed = false;
+        self.surface_announced = false;
 
         window.setUserPointer(self);
         window.setIconifyCallback(iconifyCallback);
         window.setFramebufferSizeCallback(framebufferSizeCallback);
 
+        if (self.fullscreen) {
+            window.setInputModeCursor(.hidden);
+        }
+
+        try self.waitForInitialConfigure();
+
         try self.pushEvent(.{
             .kind = .surface_available,
             .extent = self.currentExtentUnchecked(),
         });
+        self.surface_announced = true;
+    }
+
+    fn waitForInitialConfigure(self: *DesktopHost) !void {
+        const window = self.window.?;
+        const max_iterations: u32 = 20;
+        const iteration_timeout_s: f64 = 0.05;
+        var i: u32 = 0;
+        while (i < max_iterations) : (i += 1) {
+            const size = window.getFramebufferSize();
+            if (size.width != 0 and size.height != 0) return;
+            glfw.waitEventsTimeout(iteration_timeout_s);
+        }
+        return error.SurfaceConfigureTimeout;
     }
 
     pub fn initVulkan(self: *DesktopHost) !void {
@@ -122,6 +171,7 @@ pub const DesktopHost = struct {
             return;
         }
         glfw.waitEvents();
+        self.pollEscape();
         self.pushCloseEvent() catch {};
     }
 
@@ -130,11 +180,13 @@ pub const DesktopHost = struct {
             return;
         }
         glfw.pollEvents();
+        self.pollEscape();
         self.pushCloseEvent() catch {};
     }
 
     pub fn shutdown(self: *DesktopHost) void {
         if (self.window) |window| {
+            window.setInputModeCursor(.normal);
             window.setFramebufferSizeCallback(null);
             window.setIconifyCallback(null);
             window.setUserPointer(null);
@@ -186,9 +238,19 @@ pub const DesktopHost = struct {
         }) catch {};
     }
 
+    fn pollEscape(self: *DesktopHost) void {
+        const window = self.window orelse return;
+        if (self.closed) return;
+        if (window.getKey(.escape) != .press) return;
+        window.setShouldClose(true);
+    }
+
     fn framebufferSizeCallback(window: glfw.Window, width: u32, height: u32) void {
         const self = fromWindow(window) orelse return;
         if (width == 0 or height == 0) {
+            return;
+        }
+        if (!self.surface_announced) {
             return;
         }
         self.pushEvent(.{

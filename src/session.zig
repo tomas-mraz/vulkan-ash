@@ -213,7 +213,6 @@ pub const Session = struct {
             .command_buffer_count = 1,
             .p_command_buffers = @ptrCast(&command_buffer),
         }}, fence);
-        _ = try device.waitForFences(&.{fence}, .true, 10 * std.time.ns_per_s);
     }
 
     fn handleEvent(self: *Session, event: HostEvent, renderer: anytype) !bool {
@@ -279,7 +278,7 @@ pub const Session = struct {
         self.manager = try Manager.init(self.allocator, self.app_name, init_options);
         errdefer self.teardownDevice(renderer);
 
-        self.swapchain = try Swapchain.init(&self.manager.?, self.allocator, hint);
+        self.swapchain = try Swapchain.initWithOptions(&self.manager.?, self.allocator, hint, self.opts.swapchain_options);
         self.cmd_ctx = try CommandContext.init(
             self.allocator,
             self.manager.?.device.?,
@@ -327,6 +326,9 @@ pub const Session = struct {
         if (self.needsRecreate()) {
             try self.recreateSwapchain(renderer);
         }
+
+        const device = self.manager.?.device.?;
+        _ = try device.waitForFences(&.{self.sync.?.fence}, .true, 10 * std.time.ns_per_s);
 
         const acquired = try self.acquireNextImage(std.math.maxInt(u64), self.sync.?.semaphore, .null_handle);
         if (!acquired.acquired) {

@@ -560,7 +560,10 @@ fn debugUtilsMessengerCallback(
         "performance"
     else
         "general";
-    const message = if (callback_data) |data| data.p_message else "no message";
+    const message: []const u8 = if (callback_data) |data|
+        if (data.p_message) |ptr| std.mem.span(ptr) else "no message"
+    else
+        "no message";
     std.log.warn("vulkan {s}/{s}: {s}", .{ severity_name, type_name, message });
     return .false;
 }

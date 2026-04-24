@@ -13,7 +13,7 @@ pub const SyncInfo = struct {
         };
         errdefer self.destroy();
 
-        self.fence = try device.createFence(&.{}, null);
+        self.fence = try device.createFence(&.{ .flags = .{ .signaled_bit = true } }, null);
         self.semaphore = try device.createSemaphore(&.{}, null);
         return self;
     }
