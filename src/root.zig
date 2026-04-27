@@ -21,7 +21,6 @@ pub const SessionOptions = @import("session.zig").SessionOptions;
 pub const SwapImage = @import("swapchain.zig").SwapImage;
 pub const Swapchain = @import("swapchain.zig").Swapchain;
 pub const SwapchainOptions = @import("swapchain.zig").SwapchainOptions;
-pub const SyncInfo = @import("sync.zig").SyncInfo;
 pub const TextureOptions = @import("image_resource.zig").TextureOptions;
 pub const checkDeviceExtensions = @import("manager.zig").checkDeviceExtensions;
 pub const createTextureFromEncoded = @import("image_resource.zig").createTextureFromEncoded;
@@ -38,5 +37,4 @@ test {
     _ = Host;
     _ = Manager;
     _ = Session;
-    _ = SyncInfo;
 }

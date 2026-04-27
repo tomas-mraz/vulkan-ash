@@ -77,6 +77,25 @@ pub const Swapchain = struct {
         }
     }
 
+    pub fn acquireNext(self: *Swapchain) !PresentState {
+        const device = self.manager.device orelse return error.DeviceNotInitialized;
+        const result = try device.acquireNextImageKHR(
+            self.handle,
+            std.math.maxInt(u64),
+            self.next_image_acquired,
+            .null_handle,
+        );
+
+        std.mem.swap(vk.Semaphore, &self.swap_images[result.image_index].image_acquired, &self.next_image_acquired);
+        self.image_index = result.image_index;
+
+        return switch (result.result) {
+            .success => .optimal,
+            .suboptimal_khr => .suboptimal,
+            else => unreachable,
+        };
+    }
+
     pub fn present(self: *Swapchain, cmdbuf: vk.CommandBuffer) !PresentState {
         const current = &self.swap_images[self.image_index];
         try current.waitForFence(self.manager);

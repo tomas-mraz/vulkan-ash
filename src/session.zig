@@ -12,7 +12,6 @@ const InitOptions = @import("manager.zig").InitOptions;
 const SurfaceFactory = @import("manager.zig").SurfaceFactory;
 const Swapchain = @import("swapchain.zig").Swapchain;
 const SwapchainOptions = @import("swapchain.zig").SwapchainOptions;
-const SyncInfo = @import("sync.zig").SyncInfo;
 
 pub const Frame = struct {
     cmd: vk.CommandBuffer,
@@ -32,11 +31,6 @@ pub const SessionOptions = struct {
     swapchain_options: SwapchainOptions = .{},
 };
 
-pub const AcquireNextImageResult = struct {
-    image_index: u32,
-    acquired: bool,
-};
-
 pub const Session = struct {
     allocator: Allocator,
     host: Host,
@@ -46,7 +40,6 @@ pub const Session = struct {
     manager: ?Manager = null,
     swapchain: ?Swapchain = null,
     cmd_ctx: ?CommandContext = null,
-    sync: ?SyncInfo = null,
 
     needs_recreate: bool = false,
     running: bool = false,
@@ -123,62 +116,7 @@ pub const Session = struct {
         self.needs_recreate = false;
     }
 
-    pub fn acquireNextImage(
-        self: *Session,
-        timeout: u64,
-        semaphore: vk.Semaphore,
-        fence: vk.Fence,
-    ) !AcquireNextImageResult {
-        const swapchain = self.swapchain orelse return error.NoSwapchain;
-        const device = self.manager.?.device orelse return error.DeviceNotInitialized;
-
-        const acquired = device.acquireNextImageKHR(swapchain.handle, timeout, semaphore, fence) catch |err| switch (err) {
-            error.OutOfDateKHR => {
-                self.needs_recreate = true;
-                return .{
-                    .image_index = 0,
-                    .acquired = false,
-                };
-            },
-            else => return err,
-        };
-
-        if (acquired.result == .suboptimal_khr) {
-            self.needs_recreate = true;
-        }
-
-        return .{
-            .image_index = acquired.image_index,
-            .acquired = true,
-        };
-    }
-
-    pub fn presentImage(self: *Session, image_index: u32, wait_semaphores: []const vk.Semaphore) !bool {
-        const swapchain = self.swapchain orelse return error.NoSwapchain;
-        const manager = self.manager orelse return error.ManagerNotInitialized;
-        const device = manager.device orelse return error.DeviceNotInitialized;
-
-        const result = device.queuePresentKHR(manager.present_queue.handle, &.{
-            .wait_semaphore_count = @intCast(wait_semaphores.len),
-            .p_wait_semaphores = if (wait_semaphores.len == 0) undefined else wait_semaphores.ptr,
-            .swapchain_count = 1,
-            .p_swapchains = @ptrCast(&swapchain.handle),
-            .p_image_indices = @ptrCast(&image_index),
-        }) catch |err| switch (err) {
-            error.OutOfDateKHR => {
-                self.needs_recreate = true;
-                return false;
-            },
-            else => return err,
-        };
-
-        if (result == .suboptimal_khr) {
-            self.needs_recreate = true;
-        }
-        return true;
-    }
-
-    pub fn beginFrame(self: *Session, image_index: u32) !vk.CommandBuffer {
+    fn beginFrame(self: *Session, image_index: u32) !vk.CommandBuffer {
         const cmd_ctx = self.cmd_ctx orelse return error.NoCommandContext;
         const command_buffers = cmd_ctx.getCmdBuffers();
         if (image_index >= command_buffers.len) {
@@ -191,28 +129,8 @@ pub const Session = struct {
         return command_buffer;
     }
 
-    pub fn endFrame(self: *Session, command_buffer: vk.CommandBuffer) !void {
+    fn endFrame(self: *Session, command_buffer: vk.CommandBuffer) !void {
         try self.manager.?.device.?.endCommandBuffer(command_buffer);
-    }
-
-    pub fn submitRender(
-        self: *Session,
-        command_buffer: vk.CommandBuffer,
-        fence: vk.Fence,
-        wait_semaphores: []const vk.Semaphore,
-    ) !void {
-        const manager = self.manager orelse return error.ManagerNotInitialized;
-        const device = manager.device orelse return error.DeviceNotInitialized;
-
-        var wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
-        try device.resetFences(&.{fence});
-        try device.queueSubmit(manager.graphics_queue.handle, &.{.{
-            .wait_semaphore_count = @intCast(wait_semaphores.len),
-            .p_wait_semaphores = if (wait_semaphores.len == 0) undefined else wait_semaphores.ptr,
-            .p_wait_dst_stage_mask = if (wait_semaphores.len == 0) undefined else &wait_stages,
-            .command_buffer_count = 1,
-            .p_command_buffers = @ptrCast(&command_buffer),
-        }}, fence);
     }
 
     fn handleEvent(self: *Session, event: HostEvent, renderer: anytype) !bool {
@@ -285,7 +203,6 @@ pub const Session = struct {
             self.manager.?.graphics_queue.family,
             self.swapchain.?.imageCount(),
         );
-        self.sync = try SyncInfo.init(self.manager.?.device.?);
 
         try renderer.createOnce(self);
         try renderer.createSized(self, self.swapchain.?.extent);
@@ -302,10 +219,6 @@ pub const Session = struct {
             renderer.destroySized();
             renderer.destroyOnce();
             self.running = false;
-        }
-        if (self.sync) |*sync| {
-            sync.destroy();
-            self.sync = null;
         }
         if (self.cmd_ctx) |*cmd_ctx| {
             cmd_ctx.destroy();
@@ -327,21 +240,24 @@ pub const Session = struct {
             try self.recreateSwapchain(renderer);
         }
 
-        const device = self.manager.?.device.?;
-        _ = try device.waitForFences(&.{self.sync.?.fence}, .true, 10 * std.time.ns_per_s);
+        const manager = &self.manager.?;
+        const device = manager.device.?;
+        const swapchain = &self.swapchain.?;
+        const image_index = swapchain.image_index;
+        const swap_image = &swapchain.swap_images[image_index];
 
-        const acquired = try self.acquireNextImage(std.math.maxInt(u64), self.sync.?.semaphore, .null_handle);
-        if (!acquired.acquired) {
-            try self.recreateSwapchain(renderer);
-            return;
-        }
+        // Wait for previous use of this image to finish before reusing its
+        // command buffer and signaling its fence again. CPU work for the
+        // next frame can already be in flight on a different image.
+        _ = try device.waitForFences(&.{swap_image.frame_fence}, .true, std.math.maxInt(u64));
+        try device.resetFences(&.{swap_image.frame_fence});
 
-        const command_buffer = try self.beginFrame(acquired.image_index);
+        const command_buffer = try self.beginFrame(image_index);
         const frame = Frame{
             .cmd = command_buffer,
-            .image_index = acquired.image_index,
-            .extent = self.swapchain.?.extent,
-            .swapchain = &self.swapchain.?,
+            .image_index = image_index,
+            .extent = swapchain.extent,
+            .swapchain = swapchain,
         };
 
         if (self.isPrimaryOrientation()) {
@@ -349,8 +265,45 @@ pub const Session = struct {
         }
 
         try self.endFrame(command_buffer);
-        try self.submitRender(command_buffer, self.sync.?.fence, &.{self.sync.?.semaphore});
-        _ = try self.presentImage(acquired.image_index, &.{});
+
+        const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
+        try device.queueSubmit(manager.graphics_queue.handle, &.{.{
+            .wait_semaphore_count = 1,
+            .p_wait_semaphores = @ptrCast(&swap_image.image_acquired),
+            .p_wait_dst_stage_mask = &wait_stages,
+            .command_buffer_count = 1,
+            .p_command_buffers = @ptrCast(&command_buffer),
+            .signal_semaphore_count = 1,
+            .p_signal_semaphores = @ptrCast(&swap_image.render_finished),
+        }}, swap_image.frame_fence);
+
+        const present_result = device.queuePresentKHR(manager.present_queue.handle, &.{
+            .wait_semaphore_count = 1,
+            .p_wait_semaphores = @ptrCast(&swap_image.render_finished),
+            .swapchain_count = 1,
+            .p_swapchains = @ptrCast(&swapchain.handle),
+            .p_image_indices = @ptrCast(&image_index),
+        }) catch |err| switch (err) {
+            error.OutOfDateKHR => {
+                self.needs_recreate = true;
+                return;
+            },
+            else => return err,
+        };
+        if (present_result == .suboptimal_khr) {
+            self.needs_recreate = true;
+        }
+
+        // Acquire next image now so the next frame already has a valid
+        // image_index plus a semaphore that will be signaled when the image
+        // is presentable. Lets the CPU prepare frame N+1 in parallel with
+        // GPU work on frame N.
+        _ = swapchain.acquireNext() catch |err| switch (err) {
+            error.OutOfDateKHR => {
+                self.needs_recreate = true;
+            },
+            else => return err,
+        };
     }
 
     fn recreateSwapchain(self: *Session, renderer: anytype) !void {
