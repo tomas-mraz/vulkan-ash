@@ -106,6 +106,19 @@ pub fn rotateY(base: *const Mat4, angle: f32) Mat4 {
     return multiply(base, &rotation);
 }
 
+/// Z-axis rotation in clip space — used to bake Vulkan surface preTransform
+/// into the projection so the compositor doesn't have to rotate the framebuffer.
+pub fn clipRotateZ(angle: f32) Mat4 {
+    const c = @cos(angle);
+    const s = @sin(angle);
+    return .{
+        .{ c, s, 0, 0 },
+        .{ -s, c, 0, 0 },
+        .{ 0, 0, 1, 0 },
+        .{ 0, 0, 0, 1 },
+    };
+}
+
 pub fn perspective(y_fov: f32, aspect: f32, near: f32, far: f32) Mat4 {
     const a = 1.0 / @tan(y_fov / 2.0);
     return .{

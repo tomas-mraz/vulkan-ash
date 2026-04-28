@@ -1,7 +1,28 @@
 const builtin = @import("builtin");
 const std = @import("std");
-const glfw = @import("glfw");
 const vk = @import("vulkan");
+
+const is_android = builtin.target.abi == .android or builtin.target.abi == .androideabi;
+// On Android the real glfw module isn't built. A dummy with matching API
+// shape lets Manager.initGlfw / its helpers still type-check; the runtime
+// stubs unreachable() because callers must use AndroidHost on Android.
+const glfw = if (is_android) GlfwStub else @import("glfw");
+
+const GlfwStub = struct {
+    pub const Window = ?*opaque {};
+    pub inline fn vulkanSupported() bool {
+        unreachable;
+    }
+    pub inline fn getRequiredInstanceExtensions() ?[][*:0]const u8 {
+        unreachable;
+    }
+    pub fn getInstanceProcAddress(_: ?*anyopaque, _: [*:0]const u8) callconv(.c) ?*anyopaque {
+        unreachable;
+    }
+    pub inline fn createWindowSurface(_: anytype, _: Window, _: anytype, _: anytype) i32 {
+        unreachable;
+    }
+};
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -203,6 +224,7 @@ pub const Manager = struct {
         window: glfw.Window,
         device_options: DeviceOptions,
     ) !Manager {
+        if (is_android) return error.UnsupportedPlatform;
         if (!glfw.vulkanSupported()) {
             return error.VulkanNotSupported;
         }

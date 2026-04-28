@@ -32,6 +32,17 @@ pub const Swapchain = struct {
     next_image_acquired: vk.Semaphore,
     opts: SwapchainOptions = .{},
 
+    /// Clip-space rotation matrix that compensates for the swapchain's
+    /// pre_transform. Multiply this onto the projection so the compositor
+    /// doesn't have to rotate the framebuffer at present time.
+    pub fn preRotationMatrix(self: *const Swapchain) @import("math.zig").Mat4 {
+        const math = @import("math.zig");
+        if (self.pre_transform.rotate_90_bit_khr) return math.clipRotateZ(math.degreesToRadians(90.0));
+        if (self.pre_transform.rotate_180_bit_khr) return math.clipRotateZ(math.degreesToRadians(180.0));
+        if (self.pre_transform.rotate_270_bit_khr) return math.clipRotateZ(math.degreesToRadians(270.0));
+        return math.identity();
+    }
+
     pub fn init(manager: *const Manager, allocator: Allocator, extent: vk.Extent2D) !Swapchain {
         return try initWithOptions(manager, allocator, extent, .{});
     }

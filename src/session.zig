@@ -31,6 +31,19 @@ pub const SessionOptions = struct {
     swapchain_options: SwapchainOptions = .{},
 };
 
+const hitch_threshold_ns: u64 = 20 * std.time.ns_per_ms;
+const hitch_diagnostics_enabled: bool = true;
+
+const FrameStageTimes = struct {
+    pump_ns: u64 = 0,
+    wait_ns: u64 = 0,
+    record_ns: u64 = 0,
+    submit_ns: u64 = 0,
+    present_ns: u64 = 0,
+    acquire_ns: u64 = 0,
+    total_ns: u64 = 0,
+};
+
 pub const Session = struct {
     allocator: Allocator,
     host: Host,
@@ -45,6 +58,8 @@ pub const Session = struct {
     running: bool = false,
     paused: bool = false,
     primary_orientation: Orientation = .any,
+
+    stages: FrameStageTimes = .{},
 
     pub fn init(allocator: Allocator, host: Host, app_name: [*:0]const u8, opts: ?SessionOptions) Session {
         return .{
@@ -75,6 +90,9 @@ pub const Session = struct {
                 continue;
             }
 
+            const iter_start_ns = self.now();
+            self.stages = .{};
+
             while (self.host.nextEvent()) |event| {
                 if (try self.handleEvent(event, renderer)) {
                     return;
@@ -84,6 +102,7 @@ pub const Session = struct {
                 }
             }
 
+            const pump_start_ns = self.now();
             self.host.pump();
             while (self.host.nextEvent()) |event| {
                 if (try self.handleEvent(event, renderer)) {
@@ -93,6 +112,7 @@ pub const Session = struct {
                     break;
                 }
             }
+            self.stages.pump_ns = self.now() -% pump_start_ns;
 
             if (!self.running or self.paused) {
                 continue;
@@ -101,7 +121,30 @@ pub const Session = struct {
             self.renderFrame(renderer) catch |err| {
                 std.log.err("Session.renderFrame failed: {}", .{err});
             };
+
+            self.stages.total_ns = self.now() -% iter_start_ns;
+            if (hitch_diagnostics_enabled and self.stages.total_ns > hitch_threshold_ns) {
+                std.log.warn(
+                    "session frame stages [ms]: total={d:.2} pump={d:.2} wait={d:.2} record={d:.2} submit={d:.2} present={d:.2} acquire={d:.2}",
+                    .{
+                        nsToMs(self.stages.total_ns),
+                        nsToMs(self.stages.pump_ns),
+                        nsToMs(self.stages.wait_ns),
+                        nsToMs(self.stages.record_ns),
+                        nsToMs(self.stages.submit_ns),
+                        nsToMs(self.stages.present_ns),
+                        nsToMs(self.stages.acquire_ns),
+                    },
+                );
+            }
         }
+    }
+
+    fn now(self: *Session) u64 {
+        _ = self;
+        var ts: std.os.linux.timespec = undefined;
+        _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
+        return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
     }
 
     pub fn needsRecreate(self: *const Session) bool {
@@ -249,9 +292,12 @@ pub const Session = struct {
         // Wait for previous use of this image to finish before reusing its
         // command buffer and signaling its fence again. CPU work for the
         // next frame can already be in flight on a different image.
+        const wait_start = self.now();
         _ = try device.waitForFences(&.{swap_image.frame_fence}, .true, std.math.maxInt(u64));
         try device.resetFences(&.{swap_image.frame_fence});
+        self.stages.wait_ns = self.now() -% wait_start;
 
+        const record_start = self.now();
         const command_buffer = try self.beginFrame(image_index);
         const frame = Frame{
             .cmd = command_buffer,
@@ -265,7 +311,9 @@ pub const Session = struct {
         }
 
         try self.endFrame(command_buffer);
+        self.stages.record_ns = self.now() -% record_start;
 
+        const submit_start = self.now();
         const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
         try device.queueSubmit(manager.graphics_queue.handle, &.{.{
             .wait_semaphore_count = 1,
@@ -276,7 +324,9 @@ pub const Session = struct {
             .signal_semaphore_count = 1,
             .p_signal_semaphores = @ptrCast(&swap_image.render_finished),
         }}, swap_image.frame_fence);
+        self.stages.submit_ns = self.now() -% submit_start;
 
+        const present_start = self.now();
         const present_result = device.queuePresentKHR(manager.present_queue.handle, &.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&swap_image.render_finished),
@@ -293,17 +343,24 @@ pub const Session = struct {
         if (present_result == .suboptimal_khr) {
             self.needs_recreate = true;
         }
+        self.stages.present_ns = self.now() -% present_start;
 
         // Acquire next image now so the next frame already has a valid
         // image_index plus a semaphore that will be signaled when the image
         // is presentable. Lets the CPU prepare frame N+1 in parallel with
         // GPU work on frame N.
+        const acquire_start = self.now();
         _ = swapchain.acquireNext() catch |err| switch (err) {
             error.OutOfDateKHR => {
                 self.needs_recreate = true;
             },
             else => return err,
         };
+        self.stages.acquire_ns = self.now() -% acquire_start;
+    }
+
+    fn nsToMs(ns: u64) f64 {
+        return @as(f64, @floatFromInt(ns)) / @as(f64, std.time.ns_per_ms);
     }
 
     fn recreateSwapchain(self: *Session, renderer: anytype) !void {
