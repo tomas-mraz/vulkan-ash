@@ -89,6 +89,8 @@ fn resolveRegistryPath(b: *std.Build) std.Build.LazyPath {
         b.fmt("{s}/registry/vk.xml", .{sdk_root}),
         b.fmt("{s}/share/vulkan/registry/vk.xml", .{sdk_root}),
         b.fmt("{s}/x86_64/share/vulkan/registry/vk.xml", .{sdk_root}),
+        b.fmt("{s}/macOS/share/vulkan/registry/vk.xml", .{sdk_root}),
+        b.fmt("{s}/Bin/registry/vk.xml", .{sdk_root}),
     };
 
     for (candidates) |candidate| {
@@ -96,7 +98,7 @@ fn resolveRegistryPath(b: *std.Build) std.Build.LazyPath {
         return .{ .cwd_relative = candidate };
     }
 
-    @panic("vk.xml not found under VULKAN_SDK; expected registry/vk.xml, share/vulkan/registry/vk.xml, or x86_64/share/vulkan/registry/vk.xml");
+    @panic("vk.xml not found under VULKAN_SDK; expected registry/vk.xml, share/vulkan/registry/vk.xml, x86_64/share/vulkan/registry/vk.xml, macOS/share/vulkan/registry/vk.xml or Bin/registry/vk.xml");
 }
 
 fn resolveAndroidNdk(b: *std.Build) []const u8 {

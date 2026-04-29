@@ -583,7 +583,7 @@ fn debugUtilsMessengerCallback(
     else
         "general";
     const message: []const u8 = if (callback_data) |data|
-        if (data.p_message) |ptr| std.mem.span(ptr) else "no message"
+        if (data.p_message) |msg| std.mem.span(msg) else "no message"
     else
         "no message";
     std.log.warn("vulkan {s}/{s}: {s}", .{ severity_name, type_name, message });

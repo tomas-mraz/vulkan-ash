@@ -8,12 +8,13 @@
             .url = "git+https://github.com/tomas-mraz/vulkan-zig#6d77ac2a9b25c8940d493b2f7739c639c4842482",
             .hash = "vulkan-0.0.0-r7Ytx7l9AwCsebml5bToJyyr67VASs0-7UszmWKVXNb7",
         },
-        .zig_glfw = .{
-            .path = "../glfw-zig",
-        },
         .zigimg = .{
             .url = "git+https://github.com/zigimg/zigimg.git#c7e81a13bff1cf4c5b7f085a8360f9d551143d40",
             .hash = "zigimg-0.1.0-8_eo2uScFwCnpzB1Y2n_jf3euDfMEeCLxJE_E5_W5BNe",
+        },
+        .zig_glfw = .{
+            .url = "git+https://github.com/tomas-mraz/glfw-zig#fdff4c56ff892a2f2e62f89a824b3f50eb65332b",
+            .hash = "glfw-0.3.0-YPzX9zhtBQDY4_tBrysoz89sy-lEgd9vzzGFn2y1VyKt",
         },
     },
     .paths = .{

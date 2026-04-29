@@ -78,3 +78,16 @@ pub extern fn vkGetInstanceProcAddr(
     instance: vk.Instance,
     name: [*:0]const u8,
 ) vk.PfnVoidFunction;
+
+// android/log.h priorities + write entry point used for std.log redirection.
+pub const ANDROID_LOG_UNKNOWN: c_int = 0;
+pub const ANDROID_LOG_DEFAULT: c_int = 1;
+pub const ANDROID_LOG_VERBOSE: c_int = 2;
+pub const ANDROID_LOG_DEBUG: c_int = 3;
+pub const ANDROID_LOG_INFO: c_int = 4;
+pub const ANDROID_LOG_WARN: c_int = 5;
+pub const ANDROID_LOG_ERROR: c_int = 6;
+pub const ANDROID_LOG_FATAL: c_int = 7;
+pub const ANDROID_LOG_SILENT: c_int = 8;
+
+pub extern fn __android_log_write(prio: c_int, tag: [*:0]const u8, text: [*:0]const u8) c_int;

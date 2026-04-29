@@ -153,7 +153,13 @@ pub const AndroidHost = struct {
                 self.pushEvent(.{ .kind = .surface_lost }) catch {};
                 self.surface_announced = false;
             },
-            glue.APP_CMD_WINDOW_RESIZED, glue.APP_CMD_CONFIG_CHANGED, glue.APP_CMD_CONTENT_RECT_CHANGED => {
+            glue.APP_CMD_WINDOW_REDRAW_NEEDED, glue.APP_CMD_CONTENT_RECT_CHANGED => {
+                // Rotation/resize: rebuild swapchain at next frame boundary.
+                // We deliberately ignore APP_CMD_CONFIG_CHANGED and
+                // APP_CMD_WINDOW_RESIZED — those fire before the surface is
+                // actually updated, so recreating then would query stale
+                // capabilities. REDRAW_NEEDED and CONTENT_RECT_CHANGED come
+                // after the new surface is ready.
                 if (self.app.window) |window| {
                     if (self.surface_announced) {
                         self.pushEvent(.{
