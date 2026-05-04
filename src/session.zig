@@ -142,9 +142,24 @@ pub const Session = struct {
 
     fn now(self: *Session) u64 {
         _ = self;
-        var ts: std.os.linux.timespec = undefined;
-        _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
-        return @as(u64, @intCast(ts.sec)) * std.time.ns_per_s + @as(u64, @intCast(ts.nsec));
+        return switch (@import("builtin").os.tag) {
+            .windows => blk: {
+                var counter: std.os.windows.LARGE_INTEGER = undefined;
+                var freq: std.os.windows.LARGE_INTEGER = undefined;
+                _ = std.os.windows.ntdll.RtlQueryPerformanceCounter(&counter);
+                _ = std.os.windows.ntdll.RtlQueryPerformanceFrequency(&freq);
+                const c: u64 = @intCast(counter);
+                const f: u64 = @intCast(freq);
+                break :blk @divFloor(c, f) * std.time.ns_per_s +
+                    @divFloor((c % f) * std.time.ns_per_s, f);
+            },
+            else => blk: {
+                var ts: std.c.timespec = undefined;
+                _ = std.c.clock_gettime(.MONOTONIC, &ts);
+                break :blk @as(u64, @intCast(ts.sec)) * std.time.ns_per_s +
+                    @as(u64, @intCast(ts.nsec));
+            },
+        };
     }
 
     pub fn needsRecreate(self: *const Session) bool {
