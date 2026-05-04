@@ -13,8 +13,8 @@
             .hash = "zigimg-0.1.0-8_eo2uScFwCnpzB1Y2n_jf3euDfMEeCLxJE_E5_W5BNe",
         },
         .zig_glfw = .{
-            .url = "git+https://github.com/tomas-mraz/glfw-zig#fdff4c56ff892a2f2e62f89a824b3f50eb65332b",
-            .hash = "glfw-0.3.0-YPzX9zhtBQDY4_tBrysoz89sy-lEgd9vzzGFn2y1VyKt",
+            .url = "git+https://github.com/tomas-mraz/glfw-zig#92f34ddb1e815147cff7f9c4ccaffedba0e21546",
+            .hash = "glfw-0.3.0-YPzX9xdvBQCCbGm9GXEYO72vmKWFGmilknK7OTnwBGlX",
         },
     },
     .paths = .{
