@@ -55,6 +55,7 @@ pub const Session = struct {
     cmd_ctx: ?CommandContext = null,
 
     needs_recreate: bool = false,
+    close_requested: bool = false,
     running: bool = false,
     paused: bool = false,
     primary_orientation: Orientation = .any,
@@ -78,7 +79,7 @@ pub const Session = struct {
         try self.host.start();
         defer self.host.shutdown();
 
-        while (true) {
+        while (!self.close_requested) {
             if (!self.running or self.paused) {
                 if (self.host.nextEvent()) |event| {
                     if (try self.handleEvent(event, renderer)) {
@@ -138,6 +139,8 @@ pub const Session = struct {
                 );
             }
         }
+
+        self.teardownDevice(renderer);
     }
 
     fn now(self: *Session) u64 {
@@ -168,6 +171,10 @@ pub const Session = struct {
 
     pub fn requestRecreate(self: *Session) void {
         self.needs_recreate = true;
+    }
+
+    pub fn requestClose(self: *Session) void {
+        self.close_requested = true;
     }
 
     pub fn ackRecreate(self: *Session) void {

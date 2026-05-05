@@ -171,7 +171,6 @@ pub const DesktopHost = struct {
             return;
         }
         glfw.waitEvents();
-        self.pollEscape();
         self.pushCloseEvent() catch {};
     }
 
@@ -180,7 +179,6 @@ pub const DesktopHost = struct {
             return;
         }
         glfw.pollEvents();
-        self.pollEscape();
         self.pushCloseEvent() catch {};
     }
 
@@ -236,13 +234,6 @@ pub const DesktopHost = struct {
         self.pushEvent(.{
             .kind = if (iconified) .paused else .resumed,
         }) catch {};
-    }
-
-    fn pollEscape(self: *DesktopHost) void {
-        const window = self.window orelse return;
-        if (self.closed) return;
-        if (window.getKey(.escape) != .press) return;
-        window.setShouldClose(true);
     }
 
     fn framebufferSizeCallback(window: glfw.Window, width: u32, height: u32) void {
