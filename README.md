@@ -5,26 +5,24 @@ Aktuální první iterace obsahuje knihovní projekt `ash` a základní typ `Man
 
 - načtení Vulkan loaderu přes `vulkan-zig`
 - vytvoření instance a volitelného debug messengeru
-- vytvoření surface přes callback nebo GLFW convenience init
+- vytvoření surface přes callback (`SurfaceFactory`) nebo přes `Host`
 - výběr fyzického zařízení a queue family
 - vytvoření logical device a získání hlavní queue
 - teardown celé Vulkan stack vrstvy
-- `DesktopHost` + `Session` render loop pro desktop GLFW aplikace
+- `DesktopHost` (SDL3) + `Session` render loop pro desktop aplikace
 - texture upload helpery `createTextureFromFile` a `createTextureFromRgba`
 
 Použité závislosti:
 
-- `https://github.com/tomas-mraz/vulkan-zig`
-- `../glfw-zig` z `https://github.com/tomas-mraz/glfw-zig`
+- `https://github.com/Snektron/vulkan-zig` (větev `zig-0.17-compat`)
+- `https://github.com/castholm/SDL` (SDL3 kompilované ze zdrojáků, jen desktop)
 - `https://github.com/zigimg/zigimg.git`
 
 
 # Dependencies
 
-- glfw binding
-  - https://github.com/tomas-mraz/glfw-zig.git
-  - /home/tomas/git-osobni-github/glfw-zig
+- SDL3 (window, events, Vulkan surface on desktop)
+  - https://github.com/castholm/SDL.git
 
 - vulkan-zig Vulkan API binding
-  - https://github.com/tomas-mraz/vulkan-zig.git
-  - /home/tomas/git-osobni-github/vulkan-zig
+  - https://github.com/Snektron/vulkan-zig.git (branch `zig-0.17-compat`)

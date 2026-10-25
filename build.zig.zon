@@ -2,7 +2,7 @@
     .name = .vulkan_ash,
     .fingerprint = 0xd4b6deb75bb67988,
     .version = "0.0.0",
-    .minimum_zig_version = "0.17.0-dev.56+a8226cd53",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .vulkan_zig = .{
             .url = "git+https://github.com/Snektron/vulkan-zig.git#1fa628fd49d89468241c2cab14bad41a312e79fc",

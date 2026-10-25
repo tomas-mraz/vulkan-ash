@@ -484,7 +484,7 @@ fn scorePhysicalDevice(props: vk.PhysicalDeviceProperties, index: usize) i32 {
     if (index == 0) {
         score += 100;
     }
-    if (builtin.os.tag.isDarwin() and std.ascii.indexOfIgnoreCase(name, "kosmickrisp") != null) {
+    if (builtin.os.tag.isDarwin() and std.ascii.findIgnoreCase(name, "kosmickrisp") != null) {
         score += 500;
     }
     return score;
