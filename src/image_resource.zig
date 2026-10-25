@@ -218,7 +218,7 @@ pub fn createTextureFromRgba(
     transitionImageLayout(device, command_buffer, result.image, .undefined, .transfer_dst_optimal, .{ .color = true });
     copyBufferToImage(device, command_buffer, staging_buffer, result.image, width, height);
     transitionImageLayout(device, command_buffer, result.image, .transfer_dst_optimal, .shader_read_only_optimal, .{ .color = true });
-    try cmd_ctx.endOneTime(manager.graphics_queue.handle, command_buffer);
+    try cmd_ctx.endOneTime(manager.graphics_queue.handle.?, command_buffer);
     result.layout = .shader_read_only_optimal;
 
     return result;

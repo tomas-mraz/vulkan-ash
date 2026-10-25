@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const sdl = @import("sdl");
 const vk = @import("vulkan");
@@ -53,6 +54,11 @@ pub const DesktopHost = struct {
     pub fn start(self: *DesktopHost) !void {
         if (self.window != null) {
             return;
+        }
+
+        // Linux is Wayland only: no silent fallback to X11 (XWayland).
+        if (builtin.os.tag == .linux) {
+            _ = sdl.SDL_SetHint(sdl.SDL_HINT_VIDEO_DRIVER, "wayland");
         }
 
         if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO)) {
@@ -148,7 +154,7 @@ pub const DesktopHost = struct {
         const window = self.window orelse return error.NoWindow;
 
         var surface: sdl.VkSurfaceKHR = undefined;
-        if (!sdl.SDL_Vulkan_CreateSurface(window, @ptrFromInt(@intFromEnum(instance.handle)), null, &surface)) {
+        if (!sdl.SDL_Vulkan_CreateSurface(window, @ptrCast(instance.handle), null, &surface)) {
             logSdlError("SDL_Vulkan_CreateSurface");
             return error.SurfaceInitFailed;
         }
@@ -277,7 +283,7 @@ pub const DesktopHost = struct {
         std.log.err("{s}: {s}", .{ what, sdl.SDL_GetError() });
     }
 
-    fn getSdlInstanceProcAddr(instance: vk.Instance, proc_name: [*:0]const u8) vk.PfnVoidFunction {
+    fn getSdlInstanceProcAddr(instance: ?vk.Instance, proc_name: [*:0]const u8) vk.PfnVoidFunction {
         const get_instance_proc_addr: vk.PfnGetInstanceProcAddr = @ptrCast(sdl.SDL_Vulkan_GetVkGetInstanceProcAddr() orelse return null);
         return get_instance_proc_addr(instance, proc_name);
     }

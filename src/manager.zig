@@ -18,7 +18,7 @@ var validation_layers_enabled = false;
 var debug_enabled = false;
 
 pub const Queue = struct {
-    handle: vk.Queue = .null,
+    handle: ?vk.Queue = null,
     family: u32 = 0,
 };
 
@@ -30,7 +30,7 @@ pub const DeviceOptions = struct {
     api_version: u32 = vk.makeApiVersion(0, 1, 0, 0).toU32(),
 };
 
-pub const InstanceProcAddr = *const fn (instance: vk.Instance, proc_name: [*:0]const u8) vk.PfnVoidFunction;
+pub const InstanceProcAddr = *const fn (instance: ?vk.Instance, proc_name: [*:0]const u8) vk.PfnVoidFunction;
 
 pub const SurfaceFactory = struct {
     context: ?*anyopaque = null,
@@ -49,7 +49,7 @@ pub const Manager = struct {
     instance: ?Instance = null,
     device: ?Device = null,
     surface: vk.SurfaceKHR = .null,
-    gpu: vk.PhysicalDevice = .null,
+    gpu: ?vk.PhysicalDevice = null,
     properties: vk.PhysicalDeviceProperties = undefined,
     memory_properties: vk.PhysicalDeviceMemoryProperties = undefined,
     graphics_queue: Queue = .{},
@@ -136,8 +136,8 @@ pub const Manager = struct {
 
         const selection = try pickPhysicalDevice(self.instance.?, allocator, self.surface, self.api_version);
         self.gpu = selection.handle;
-        self.properties = self.instance.?.getPhysicalDeviceProperties(self.gpu);
-        self.memory_properties = self.instance.?.getPhysicalDeviceMemoryProperties(self.gpu);
+        self.properties = self.instance.?.getPhysicalDeviceProperties(self.gpu.?);
+        self.memory_properties = self.instance.?.getPhysicalDeviceMemoryProperties(self.gpu.?);
 
         var device_extensions = ArrayList([*:0]const u8).empty;
         defer device_extensions.deinit(allocator);
@@ -145,11 +145,11 @@ pub const Manager = struct {
         if (self.surface != .null) {
             try appendUniqueExtension(&device_extensions, allocator, vk.device_extensions.khr_swapchain.name);
         }
-        if (builtin.os.tag.isDarwin() and try hasDeviceExtension(self.instance.?, allocator, self.gpu, vk.device_extensions.khr_portability_subset.name)) {
+        if (builtin.os.tag.isDarwin() and try hasDeviceExtension(self.instance.?, allocator, self.gpu.?, vk.device_extensions.khr_portability_subset.name)) {
             try appendUniqueExtension(&device_extensions, allocator, vk.device_extensions.khr_portability_subset.name);
         }
 
-        if (!try checkDeviceExtensions(self.instance.?, allocator, self.gpu, device_extensions.items)) {
+        if (!try checkDeviceExtensions(self.instance.?, allocator, self.gpu.?, device_extensions.items)) {
             return error.MissingRequiredDeviceExtension;
         }
 
@@ -168,7 +168,7 @@ pub const Manager = struct {
         };
         const queue_info_count: u32 = if (selection.graphics_family == selection.present_family) 1 else 2;
 
-        const device_handle = try self.instance.?.createDevice(self.gpu, &.{
+        const device_handle = try self.instance.?.createDevice(self.gpu.?, &.{
             .queue_create_info_count = queue_info_count,
             .p_queue_create_infos = &queue_infos,
             .enabled_extension_count = @intCast(device_extensions.items.len),
@@ -222,7 +222,7 @@ pub const Manager = struct {
             self.allocator.destroy(wrapper);
             self.instance_wrapper = null;
         }
-        self.gpu = .null;
+        self.gpu = null;
         self.graphics_queue = .{};
         self.present_queue = .{};
         self.queue = .{};
@@ -233,10 +233,10 @@ pub const Manager = struct {
     }
 
     pub fn querySurfaceExtent(self: *const Manager, fallback: vk.Extent2D) vk.Extent2D {
-        if (self.instance == null or self.surface == .null or self.gpu == .null) {
+        if (self.instance == null or self.surface == .null or self.gpu == null) {
             return fallback;
         }
-        const capabilities = self.instance.?.getPhysicalDeviceSurfaceCapabilitiesKHR(self.gpu, self.surface) catch {
+        const capabilities = self.instance.?.getPhysicalDeviceSurfaceCapabilitiesKHR(self.gpu.?, self.surface) catch {
             return fallback;
         };
         if (capabilities.current_extent.width == std.math.maxInt(u32) and capabilities.current_extent.height == std.math.maxInt(u32)) {

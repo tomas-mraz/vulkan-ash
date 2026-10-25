@@ -75,7 +75,7 @@ pub extern fn ANativeWindow_getWidth(window: *ANativeWindow) i32;
 pub extern fn ANativeWindow_getHeight(window: *ANativeWindow) i32;
 
 pub extern fn vkGetInstanceProcAddr(
-    instance: vk.Instance,
+    instance: ?vk.Instance,
     name: [*:0]const u8,
 ) vk.PfnVoidFunction;
 

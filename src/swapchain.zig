@@ -69,7 +69,7 @@ pub const Swapchain = struct {
         const allocator = self.allocator;
         const old_handle = self.handle;
 
-        try manager.device.?.queueWaitIdle(manager.present_queue.handle);
+        try manager.device.?.queueWaitIdle(manager.present_queue.handle.?);
         self.deinitExceptSwapchain();
 
         self.handle = .null;
@@ -113,7 +113,7 @@ pub const Swapchain = struct {
         try self.manager.device.?.resetFences(&.{current.frame_fence});
 
         const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe = true }};
-        try self.manager.device.?.queueSubmit(self.manager.graphics_queue.handle, &.{.{
+        try self.manager.device.?.queueSubmit(self.manager.graphics_queue.handle.?, &.{.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&current.image_acquired),
             .p_wait_dst_stage_mask = &wait_stage,
@@ -123,7 +123,7 @@ pub const Swapchain = struct {
             .p_signal_semaphores = @ptrCast(&current.render_finished),
         }}, current.frame_fence);
 
-        _ = try self.manager.device.?.queuePresentKHR(self.manager.present_queue.handle, &.{
+        _ = try self.manager.device.?.queuePresentKHR(self.manager.present_queue.handle.?, &.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&current.render_finished),
             .swapchain_count = 1,
@@ -158,14 +158,14 @@ pub const Swapchain = struct {
         const instance = manager.instance orelse return error.InstanceNotInitialized;
         const device = manager.device orelse return error.DeviceNotInitialized;
 
-        const capabilities = try instance.getPhysicalDeviceSurfaceCapabilitiesKHR(manager.gpu, manager.surface);
+        const capabilities = try instance.getPhysicalDeviceSurfaceCapabilitiesKHR(manager.gpu.?, manager.surface);
         const actual_extent = findActualExtent(capabilities, extent);
         if (actual_extent.width == 0 or actual_extent.height == 0) {
             return error.InvalidSurfaceDimensions;
         }
 
-        const surface_format = try findSurfaceFormat(instance, manager.gpu, manager.surface, allocator);
-        const present_mode = try findPresentMode(instance, manager.gpu, manager.surface, allocator, opts.present_mode);
+        const surface_format = try findSurfaceFormat(instance, manager.gpu.?, manager.surface, allocator);
+        const present_mode = try findPresentMode(instance, manager.gpu.?, manager.surface, allocator, opts.present_mode);
 
         // One image is being displayed by the compositor, one is queued and one is
         // being rendered into; the fourth gives the loop slack, so a late frame

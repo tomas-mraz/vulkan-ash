@@ -337,7 +337,7 @@ pub const Session = struct {
 
         const submit_start = self.now();
         const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output = true }};
-        try device.queueSubmit(manager.graphics_queue.handle, &.{.{
+        try device.queueSubmit(manager.graphics_queue.handle.?, &.{.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&swap_image.image_acquired),
             .p_wait_dst_stage_mask = &wait_stages,
@@ -349,7 +349,7 @@ pub const Session = struct {
         self.stages.submit_ns = self.now() -% submit_start;
 
         const present_start = self.now();
-        const present_result = device.queuePresentKHR(manager.present_queue.handle, &.{
+        const present_result = device.queuePresentKHR(manager.present_queue.handle.?, &.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&swap_image.render_finished),
             .swapchain_count = 1,

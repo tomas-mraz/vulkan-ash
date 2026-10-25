@@ -190,7 +190,7 @@ pub const AndroidHost = struct {
         };
     }
 
-    fn getAndroidInstanceProcAddr(instance: vk.Instance, name: [*:0]const u8) vk.PfnVoidFunction {
+    fn getAndroidInstanceProcAddr(instance: ?vk.Instance, name: [*:0]const u8) vk.PfnVoidFunction {
         return glue.vkGetInstanceProcAddr(instance, name);
     }
 
