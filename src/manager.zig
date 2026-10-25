@@ -2,28 +2,6 @@ const builtin = @import("builtin");
 const std = @import("std");
 const vk = @import("vulkan");
 
-const is_android = builtin.target.abi == .android or builtin.target.abi == .androideabi;
-// On Android the real glfw module isn't built. A dummy with matching API
-// shape lets Manager.initGlfw / its helpers still type-check; the runtime
-// stubs unreachable() because callers must use AndroidHost on Android.
-const glfw = if (is_android) GlfwStub else @import("glfw");
-
-const GlfwStub = struct {
-    pub const Window = ?*opaque {};
-    pub inline fn vulkanSupported() bool {
-        unreachable;
-    }
-    pub inline fn getRequiredInstanceExtensions() ?[][*:0]const u8 {
-        unreachable;
-    }
-    pub fn getInstanceProcAddress(_: ?*anyopaque, _: [*:0]const u8) callconv(.c) ?*anyopaque {
-        unreachable;
-    }
-    pub inline fn createWindowSurface(_: anytype, _: Window, _: anytype, _: anytype) i32 {
-        unreachable;
-    }
-};
-
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const BaseWrapper = vk.BaseWrapper;
@@ -40,7 +18,7 @@ var validation_layers_enabled = false;
 var debug_enabled = false;
 
 pub const Queue = struct {
-    handle: vk.Queue = .null_handle,
+    handle: vk.Queue = .null,
     family: u32 = 0,
 };
 
@@ -70,14 +48,14 @@ pub const Manager = struct {
     base: BaseWrapper,
     instance: ?Instance = null,
     device: ?Device = null,
-    surface: vk.SurfaceKHR = .null_handle,
-    gpu: vk.PhysicalDevice = .null_handle,
+    surface: vk.SurfaceKHR = .null,
+    gpu: vk.PhysicalDevice = .null,
     properties: vk.PhysicalDeviceProperties = undefined,
     memory_properties: vk.PhysicalDeviceMemoryProperties = undefined,
     graphics_queue: Queue = .{},
     present_queue: Queue = .{},
     queue: Queue = .{},
-    debug_messenger: vk.DebugUtilsMessengerEXT = .null_handle,
+    debug_messenger: vk.DebugUtilsMessengerEXT = .null,
     instance_wrapper: ?*InstanceWrapper = null,
     device_wrapper: ?*DeviceWrapper = null,
     api_version: u32 = vk.makeApiVersion(0, 1, 0, 0).toU32(),
@@ -97,11 +75,11 @@ pub const Manager = struct {
 
         try appendExtensions(&instance_extensions, allocator, options.device.instance_extensions);
         if (debug_enabled) {
-            try appendUniqueExtension(&instance_extensions, allocator, vk.extensions.ext_debug_utils.name);
+            try appendUniqueExtension(&instance_extensions, allocator, vk.instance_extensions.ext_debug_utils.name);
         }
         if (builtin.os.tag.isDarwin()) {
-            try appendUniqueExtension(&instance_extensions, allocator, vk.extensions.khr_portability_enumeration.name);
-            try appendUniqueExtension(&instance_extensions, allocator, vk.extensions.khr_get_physical_device_properties_2.name);
+            try appendUniqueExtension(&instance_extensions, allocator, vk.instance_extensions.khr_portability_enumeration.name);
+            try appendUniqueExtension(&instance_extensions, allocator, vk.instance_extensions.khr_get_physical_device_properties_2.name);
         }
 
         var layer_names = ArrayList([*:0]const u8).empty;
@@ -113,7 +91,7 @@ pub const Manager = struct {
 
         var instance_flags = vk.InstanceCreateFlags{};
         if (builtin.os.tag.isDarwin()) {
-            instance_flags.enumerate_portability_bit_khr = true;
+            instance_flags.enumerate_portability_khr = true;
         }
 
         const instance_handle = try self.base.createInstance(&.{
@@ -140,13 +118,13 @@ pub const Manager = struct {
         if (debug_enabled and self.instance.?.wrapper.dispatch.vkCreateDebugUtilsMessengerEXT != null) {
             self.debug_messenger = try self.instance.?.createDebugUtilsMessengerEXT(&.{
                 .message_severity = .{
-                    .warning_bit_ext = true,
-                    .error_bit_ext = true,
+                    .warning_ext = true,
+                    .error_ext = true,
                 },
                 .message_type = .{
-                    .general_bit_ext = true,
-                    .validation_bit_ext = true,
-                    .performance_bit_ext = true,
+                    .general_ext = true,
+                    .validation_ext = true,
+                    .performance_ext = true,
                 },
                 .pfn_user_callback = &debugUtilsMessengerCallback,
             }, null);
@@ -164,11 +142,11 @@ pub const Manager = struct {
         var device_extensions = ArrayList([*:0]const u8).empty;
         defer device_extensions.deinit(allocator);
         try appendExtensions(&device_extensions, allocator, options.device.device_extensions);
-        if (self.surface != .null_handle) {
-            try appendUniqueExtension(&device_extensions, allocator, vk.extensions.khr_swapchain.name);
+        if (self.surface != .null) {
+            try appendUniqueExtension(&device_extensions, allocator, vk.device_extensions.khr_swapchain.name);
         }
-        if (builtin.os.tag.isDarwin() and try hasDeviceExtension(self.instance.?, allocator, self.gpu, vk.extensions.khr_portability_subset.name)) {
-            try appendUniqueExtension(&device_extensions, allocator, vk.extensions.khr_portability_subset.name);
+        if (builtin.os.tag.isDarwin() and try hasDeviceExtension(self.instance.?, allocator, self.gpu, vk.device_extensions.khr_portability_subset.name)) {
+            try appendUniqueExtension(&device_extensions, allocator, vk.device_extensions.khr_portability_subset.name);
         }
 
         if (!try checkDeviceExtensions(self.instance.?, allocator, self.gpu, device_extensions.items)) {
@@ -218,39 +196,6 @@ pub const Manager = struct {
         return self;
     }
 
-    pub fn initGlfw(
-        allocator: Allocator,
-        app_name: [*:0]const u8,
-        window: glfw.Window,
-        device_options: DeviceOptions,
-    ) !Manager {
-        if (is_android) return error.UnsupportedPlatform;
-        if (!glfw.vulkanSupported()) {
-            return error.VulkanNotSupported;
-        }
-
-        const glfw_extensions = glfw.getRequiredInstanceExtensions() orelse {
-            return error.MissingRequiredInstanceExtensions;
-        };
-
-        var combined = ArrayList([*:0]const u8).empty;
-        defer combined.deinit(allocator);
-        try appendExtensions(&combined, allocator, glfw_extensions);
-        try appendExtensions(&combined, allocator, device_options.instance_extensions);
-
-        var options = InitOptions{
-            .instance_proc_addr = getGlfwInstanceProcAddr,
-            .surface_factory = .{
-                .context = @constCast(&window),
-                .callback = createGlfwSurface,
-            },
-            .device = device_options,
-        };
-        options.device.instance_extensions = combined.items;
-
-        return try Manager.init(allocator, app_name, options);
-    }
-
     pub fn destroy(self: *Manager) void {
         if (self.device) |device| {
             device.deviceWaitIdle() catch {};
@@ -262,13 +207,13 @@ pub const Manager = struct {
             self.device_wrapper = null;
         }
         if (self.instance) |instance| {
-            if (self.surface != .null_handle) {
+            if (self.surface != .null) {
                 instance.destroySurfaceKHR(self.surface, null);
-                self.surface = .null_handle;
+                self.surface = .null;
             }
-            if (self.debug_messenger != .null_handle) {
+            if (self.debug_messenger != .null) {
                 instance.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
-                self.debug_messenger = .null_handle;
+                self.debug_messenger = .null;
             }
             instance.destroyInstance(null);
             self.instance = null;
@@ -277,7 +222,7 @@ pub const Manager = struct {
             self.allocator.destroy(wrapper);
             self.instance_wrapper = null;
         }
-        self.gpu = .null_handle;
+        self.gpu = .null;
         self.graphics_queue = .{};
         self.present_queue = .{};
         self.queue = .{};
@@ -288,7 +233,7 @@ pub const Manager = struct {
     }
 
     pub fn querySurfaceExtent(self: *const Manager, fallback: vk.Extent2D) vk.Extent2D {
-        if (self.instance == null or self.surface == .null_handle or self.gpu == .null_handle) {
+        if (self.instance == null or self.surface == .null or self.gpu == .null) {
             return fallback;
         }
         const capabilities = self.instance.?.getPhysicalDeviceSurfaceCapabilitiesKHR(self.gpu, self.surface) catch {
@@ -491,10 +436,10 @@ fn findQueueFamilies(
     var present_only: ?u32 = null;
     for (families, 0..) |family, index| {
         const family_index: u32 = @intCast(index);
-        if (graphics_only == null and family.queue_flags.graphics_bit) {
+        if (graphics_only == null and family.queue_flags.graphics) {
             graphics_only = family_index;
         }
-        if (surface == .null_handle) {
+        if (surface == .null) {
             continue;
         }
         if (present_only == null and (try instance.getPhysicalDeviceSurfaceSupportKHR(gpu, family_index, surface)) == .true) {
@@ -504,7 +449,7 @@ fn findQueueFamilies(
     if (graphics_only == null) {
         return null;
     }
-    if (surface == .null_handle) {
+    if (surface == .null) {
         return .{
             .graphics_family = graphics_only.?,
             .present_family = graphics_only.?,
@@ -545,40 +490,23 @@ fn scorePhysicalDevice(props: vk.PhysicalDeviceProperties, index: usize) i32 {
     return score;
 }
 
-fn getGlfwInstanceProcAddr(instance: vk.Instance, proc_name: [*:0]const u8) vk.PfnVoidFunction {
-    return @ptrCast(glfw.getInstanceProcAddress(
-        if (instance == .null_handle) null else @ptrFromInt(@intFromEnum(instance)),
-        proc_name,
-    ));
-}
-
-fn createGlfwSurface(context: ?*anyopaque, instance: Instance) !vk.SurfaceKHR {
-    const window: *const glfw.Window = @ptrCast(@alignCast(context orelse return error.MissingWindowHandle));
-    var surface: vk.SurfaceKHR = undefined;
-    const result: vk.Result = @enumFromInt(glfw.createWindowSurface(instance.handle, window.*, null, &surface));
-    if (result != .success) {
-        return error.SurfaceInitFailed;
-    }
-    return surface;
-}
-
 fn debugUtilsMessengerCallback(
     severity: vk.DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk.DebugUtilsMessageTypeFlagsEXT,
     callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT,
     _: ?*anyopaque,
 ) callconv(.c) vk.Bool32 {
-    const severity_name = if (severity.error_bit_ext)
+    const severity_name = if (severity.error_ext)
         "error"
-    else if (severity.warning_bit_ext)
+    else if (severity.warning_ext)
         "warning"
-    else if (severity.info_bit_ext)
+    else if (severity.info_ext)
         "info"
     else
         "verbose";
-    const type_name = if (message_type.validation_bit_ext)
+    const type_name = if (message_type.validation_ext)
         "validation"
-    else if (message_type.performance_bit_ext)
+    else if (message_type.performance_ext)
         "performance"
     else
         "general";

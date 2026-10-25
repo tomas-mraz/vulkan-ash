@@ -336,7 +336,7 @@ pub const Session = struct {
         self.stages.record_ns = self.now() -% record_start;
 
         const submit_start = self.now();
-        const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
+        const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output = true }};
         try device.queueSubmit(manager.graphics_queue.handle, &.{.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&swap_image.image_acquired),
@@ -418,7 +418,7 @@ pub const Session = struct {
         }
         var width = self.swapchain.?.extent.width;
         var height = self.swapchain.?.extent.height;
-        if (self.swapchain.?.pre_transform.rotate_90_bit_khr or self.swapchain.?.pre_transform.rotate_270_bit_khr) {
+        if (self.swapchain.?.pre_transform.rotate_90_khr or self.swapchain.?.pre_transform.rotate_270_khr) {
             std.mem.swap(u32, &width, &height);
         }
         return switch (self.primary_orientation) {

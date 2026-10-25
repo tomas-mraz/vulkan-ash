@@ -36,20 +36,7 @@ pub const setValidations = @import("manager.zig").setValidations;
 
 // Platform-specific exports — empty stubs on the other platform so users get
 // a clean "field not found" rather than a missing import.
-pub const glfw = if (is_android) struct {
-    /// Monotonic seconds since the first call — mirrors glfw.getTime() semantics
-    /// closely enough for time-based animations on Android where GLFW is absent.
-    pub fn getTime() f64 {
-        var ts: std.os.linux.timespec = undefined;
-        _ = std.os.linux.clock_gettime(std.os.linux.CLOCK.MONOTONIC, &ts);
-        const Holder = struct {
-            var start_sec: ?isize = null;
-        };
-        if (Holder.start_sec == null) Holder.start_sec = ts.sec;
-        return @as(f64, @floatFromInt(ts.sec - Holder.start_sec.?)) +
-            @as(f64, @floatFromInt(ts.nsec)) / 1e9;
-    }
-} else @import("glfw");
+pub const sdl = if (is_android) struct {} else @import("sdl");
 pub const DesktopHost = if (is_android) struct {} else @import("host_desktop.zig").DesktopHost;
 pub const AndroidHost = if (is_android) @import("host_android.zig").AndroidHost else struct {};
 pub const native_app_glue = if (is_android) @import("android_glue.zig") else struct {};

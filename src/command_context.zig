@@ -7,7 +7,7 @@ const Device = @import("manager.zig").Device;
 pub const CommandContext = struct {
     allocator: Allocator,
     device: Device,
-    cmd_pool: vk.CommandPool = .null_handle,
+    cmd_pool: vk.CommandPool = .null,
     cmd_buffers: []vk.CommandBuffer = &.{},
 
     pub fn init(
@@ -23,7 +23,7 @@ pub const CommandContext = struct {
         errdefer self.destroy();
 
         self.cmd_pool = try device.createCommandPool(&.{
-            .flags = .{ .reset_command_buffer_bit = true },
+            .flags = .{ .reset_command_buffer = true },
             .queue_family_index = queue_family_index,
         }, null);
 
@@ -49,9 +49,9 @@ pub const CommandContext = struct {
             self.allocator.free(self.cmd_buffers);
             self.cmd_buffers = &.{};
         }
-        if (self.cmd_pool != .null_handle) {
+        if (self.cmd_pool != .null) {
             self.device.destroyCommandPool(self.cmd_pool, null);
-            self.cmd_pool = .null_handle;
+            self.cmd_pool = .null;
         }
     }
 
@@ -73,7 +73,7 @@ pub const CommandContext = struct {
         errdefer self.device.freeCommandBuffers(self.cmd_pool, (&command_buffer)[0..1]);
 
         try self.device.beginCommandBuffer(command_buffer, &.{
-            .flags = .{ .one_time_submit_bit = true },
+            .flags = .{ .one_time_submit = true },
         });
         return command_buffer;
     }

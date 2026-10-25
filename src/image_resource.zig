@@ -7,30 +7,30 @@ const CommandContext = @import("command_context.zig").CommandContext;
 const Manager = @import("manager.zig").Manager;
 
 pub const ImageResource = struct {
-    image: vk.Image = .null_handle,
-    memory: vk.DeviceMemory = .null_handle,
-    view: vk.ImageView = .null_handle,
-    sampler: vk.Sampler = .null_handle,
+    image: vk.Image = .null,
+    memory: vk.DeviceMemory = .null,
+    view: vk.ImageView = .null,
+    sampler: vk.Sampler = .null,
     format: vk.Format = .undefined,
     extent: vk.Extent3D = .{ .width = 0, .height = 0, .depth = 0 },
     layout: vk.ImageLayout = .undefined,
 
     pub fn deinit(self: *ImageResource, device: vk.DeviceProxy) void {
-        if (self.sampler != .null_handle) {
+        if (self.sampler != .null) {
             device.destroySampler(self.sampler, null);
-            self.sampler = .null_handle;
+            self.sampler = .null;
         }
-        if (self.view != .null_handle) {
+        if (self.view != .null) {
             device.destroyImageView(self.view, null);
-            self.view = .null_handle;
+            self.view = .null;
         }
-        if (self.image != .null_handle) {
+        if (self.image != .null) {
             device.destroyImage(self.image, null);
-            self.image = .null_handle;
+            self.image = .null;
         }
-        if (self.memory != .null_handle) {
+        if (self.memory != .null) {
             device.freeMemory(self.memory, null);
-            self.memory = .null_handle;
+            self.memory = .null;
         }
         self.extent = .{ .width = 0, .height = 0, .depth = 0 };
     }
@@ -139,15 +139,15 @@ pub fn createTextureFromRgba(
 
     const staging_buffer = try device.createBuffer(&.{
         .size = rgba_pixels.len,
-        .usage = .{ .transfer_src_bit = true },
+        .usage = .{ .transfer_src = true },
         .sharing_mode = .exclusive,
     }, null);
     defer device.destroyBuffer(staging_buffer, null);
 
     const staging_requirements = device.getBufferMemoryRequirements(staging_buffer);
     const staging_memory = try manager.allocate(staging_requirements, .{
-        .host_visible_bit = true,
-        .host_coherent_bit = true,
+        .host_visible = true,
+        .host_coherent = true,
     });
     defer device.freeMemory(staging_memory, null);
 
@@ -169,15 +169,15 @@ pub fn createTextureFromRgba(
         .extent = result.extent,
         .mip_levels = 1,
         .array_layers = 1,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .tiling = .optimal,
-        .usage = .{ .transfer_dst_bit = true, .sampled_bit = true },
+        .usage = .{ .transfer_dst = true, .sampled = true },
         .sharing_mode = .exclusive,
         .initial_layout = .undefined,
     }, null);
 
     const image_requirements = device.getImageMemoryRequirements(result.image);
-    result.memory = try manager.allocate(image_requirements, .{ .device_local_bit = true });
+    result.memory = try manager.allocate(image_requirements, .{ .device_local = true });
     try device.bindImageMemory(result.image, result.memory, 0);
 
     result.view = try device.createImageView(&.{
@@ -186,7 +186,7 @@ pub fn createTextureFromRgba(
         .format = options.format,
         .components = .{ .r = .identity, .g = .identity, .b = .identity, .a = .identity },
         .subresource_range = .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .base_mip_level = 0,
             .level_count = 1,
             .base_array_layer = 0,
@@ -215,9 +215,9 @@ pub fn createTextureFromRgba(
     const command_buffer = try cmd_ctx.beginOneTime();
     errdefer device.freeCommandBuffers(cmd_ctx.getCmdPool(), (&command_buffer)[0..1]);
 
-    transitionImageLayout(device, command_buffer, result.image, .undefined, .transfer_dst_optimal, .{ .color_bit = true });
+    transitionImageLayout(device, command_buffer, result.image, .undefined, .transfer_dst_optimal, .{ .color = true });
     copyBufferToImage(device, command_buffer, staging_buffer, result.image, width, height);
-    transitionImageLayout(device, command_buffer, result.image, .transfer_dst_optimal, .shader_read_only_optimal, .{ .color_bit = true });
+    transitionImageLayout(device, command_buffer, result.image, .transfer_dst_optimal, .shader_read_only_optimal, .{ .color = true });
     try cmd_ctx.endOneTime(manager.graphics_queue.handle, command_buffer);
     result.layout = .shader_read_only_optimal;
 
@@ -232,16 +232,16 @@ fn transitionImageLayout(
     new_layout: vk.ImageLayout,
     aspect_mask: vk.ImageAspectFlags,
 ) void {
-    var src_stage: vk.PipelineStageFlags = .{ .top_of_pipe_bit = true };
-    var dst_stage: vk.PipelineStageFlags = .{ .transfer_bit = true };
+    var src_stage: vk.PipelineStageFlags = .{ .top_of_pipe = true };
+    var dst_stage: vk.PipelineStageFlags = .{ .transfer = true };
     var src_access_mask: vk.AccessFlags = .{};
-    var dst_access_mask: vk.AccessFlags = .{ .transfer_write_bit = true };
+    var dst_access_mask: vk.AccessFlags = .{ .transfer_write = true };
 
     if (old_layout == .transfer_dst_optimal and new_layout == .shader_read_only_optimal) {
-        src_stage = .{ .transfer_bit = true };
-        dst_stage = .{ .fragment_shader_bit = true };
-        src_access_mask = .{ .transfer_write_bit = true };
-        dst_access_mask = .{ .shader_read_bit = true };
+        src_stage = .{ .transfer = true };
+        dst_stage = .{ .fragment_shader = true };
+        src_access_mask = .{ .transfer_write = true };
+        dst_access_mask = .{ .shader_read = true };
     }
 
     const barrier = vk.ImageMemoryBarrier{
@@ -285,7 +285,7 @@ fn copyBufferToImage(
         .buffer_row_length = 0,
         .buffer_image_height = 0,
         .image_subresource = .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .mip_level = 0,
             .base_array_layer = 0,
             .layer_count = 1,

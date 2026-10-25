@@ -23,13 +23,20 @@ pub fn build(b: *std.Build) void {
     imports_buf[imports_len] = .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") };
     imports_len += 1;
 
+    var sdl_lib: ?*std.Build.Step.Compile = null;
     if (!is_android) {
-        const glfw_dep = b.dependency("zig_glfw", .{
-            .target = target,
-            .optimize = optimize,
-        });
-        imports_buf[imports_len] = .{ .name = "glfw", .module = glfw_dep.module("glfw") };
-        imports_len += 1;
+        if (sdlDependency(b, target, optimize)) |sdl_dep| {
+            const lib = sdl_dep.artifact("SDL3");
+            const sdl_c = b.addTranslateC(.{
+                .root_source_file = b.path("src/sdl.h"),
+                .target = target,
+                .optimize = optimize,
+            });
+            sdl_c.addIncludePath(lib.getEmittedIncludeTree());
+            imports_buf[imports_len] = .{ .name = "sdl", .module = sdl_c.createModule() };
+            imports_len += 1;
+            sdl_lib = lib;
+        }
     }
 
     const ash_module = b.addModule("ash", .{
@@ -39,6 +46,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
         .imports = imports_buf[0..imports_len],
     });
+    if (sdl_lib) |lib| ash_module.linkLibrary(lib);
 
     if (is_android) {
         const ndk = resolveAndroidNdk(b);
@@ -99,6 +107,26 @@ fn resolveRegistryPath(b: *std.Build) std.Build.LazyPath {
     }
 
     @panic("vk.xml not found under VULKAN_SDK; expected registry/vk.xml, share/vulkan/registry/vk.xml, x86_64/share/vulkan/registry/vk.xml, macOS/share/vulkan/registry/vk.xml or Bin/registry/vk.xml");
+}
+
+// SDL is compiled from source. Cross-compiling it for macOS from a non-Darwin
+// host needs the staged Apple SDK from $SDKROOT.
+fn sdlDependency(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) ?*std.Build.Dependency {
+    if (target.result.os.tag.isDarwin() and !b.graph.host.result.os.tag.isDarwin()) {
+        if (b.graph.environ_map.get("SDKROOT")) |sdk_root| {
+            return b.lazyDependency("sdl", .{
+                .target = target,
+                .optimize = optimize,
+                .system_include_path = std.Build.LazyPath{ .cwd_relative = b.fmt("{s}/usr/include", .{sdk_root}) },
+                .system_framework_path = std.Build.LazyPath{ .cwd_relative = b.fmt("{s}/System/Library/Frameworks", .{sdk_root}) },
+                .library_path = std.Build.LazyPath{ .cwd_relative = b.fmt("{s}/usr/lib", .{sdk_root}) },
+            });
+        }
+    }
+    return b.lazyDependency("sdl", .{
+        .target = target,
+        .optimize = optimize,
+    });
 }
 
 fn resolveAndroidNdk(b: *std.Build) []const u8 {

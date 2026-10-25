@@ -5,16 +5,18 @@
     .minimum_zig_version = "0.17.0-dev.56+a8226cd53",
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "git+https://github.com/tomas-mraz/vulkan-zig#6d77ac2a9b25c8940d493b2f7739c639c4842482",
-            .hash = "vulkan-0.0.0-r7Ytx7l9AwCsebml5bToJyyr67VASs0-7UszmWKVXNb7",
+            .url = "git+https://github.com/Snektron/vulkan-zig.git#1fa628fd49d89468241c2cab14bad41a312e79fc",
+            .hash = "vulkan-0.0.0-r7Ytxy2BAwCPqBJUCXp6XXMwWqFD3DNrMLWWQvRRSXOC",
         },
         .zigimg = .{
-            .url = "git+https://github.com/zigimg/zigimg.git#c7e81a13bff1cf4c5b7f085a8360f9d551143d40",
-            .hash = "zigimg-0.1.0-8_eo2uScFwCnpzB1Y2n_jf3euDfMEeCLxJE_E5_W5BNe",
+            .url = "git+https://github.com/zigimg/zigimg.git#083d0304840a3f5fd547c2e2005148a18886c401",
+            .hash = "zigimg-0.1.0-8_eo2j1pGAA3ArMKhXcipNR-tdjmeWmByLJhOff2A_X4",
         },
-        .zig_glfw = .{
-            .url = "git+https://github.com/tomas-mraz/glfw-zig#92f34ddb1e815147cff7f9c4ccaffedba0e21546",
-            .hash = "glfw-0.3.0-YPzX9xdvBQCCbGm9GXEYO72vmKWFGmilknK7OTnwBGlX",
+        .sdl = .{
+            .url = "git+https://github.com/castholm/SDL.git?ref=v0.6.0+3.4.18#dbcb19aa3583c318556ecae3ecbeb29b102d37c5",
+            .hash = "sdl-0.6.0+3.4.18-SDL--p-gqAGWpnfTLlhs0dgjDtc4P4_CHeNLGY_SX_Fv",
+            // Desktop only; Android keeps native_app_glue.
+            .lazy = true,
         },
     },
     .paths = .{

@@ -37,9 +37,9 @@ pub const Swapchain = struct {
     /// doesn't have to rotate the framebuffer at present time.
     pub fn preRotationMatrix(self: *const Swapchain) @import("math.zig").Mat4 {
         const math = @import("math.zig");
-        if (self.pre_transform.rotate_90_bit_khr) return math.clipRotateZ(math.degreesToRadians(90.0));
-        if (self.pre_transform.rotate_180_bit_khr) return math.clipRotateZ(math.degreesToRadians(180.0));
-        if (self.pre_transform.rotate_270_bit_khr) return math.clipRotateZ(math.degreesToRadians(270.0));
+        if (self.pre_transform.rotate_90_khr) return math.clipRotateZ(math.degreesToRadians(90.0));
+        if (self.pre_transform.rotate_180_khr) return math.clipRotateZ(math.degreesToRadians(180.0));
+        if (self.pre_transform.rotate_270_khr) return math.clipRotateZ(math.degreesToRadians(270.0));
         return math.identity();
     }
 
@@ -53,11 +53,11 @@ pub const Swapchain = struct {
         extent: vk.Extent2D,
         opts: SwapchainOptions,
     ) !Swapchain {
-        return try initRecycle(manager, allocator, extent, .null_handle, opts);
+        return try initRecycle(manager, allocator, extent, .null, opts);
     }
 
     pub fn deinit(self: Swapchain) void {
-        if (self.handle == .null_handle) {
+        if (self.handle == .null) {
             return;
         }
         self.deinitExceptSwapchain();
@@ -72,7 +72,7 @@ pub const Swapchain = struct {
         try manager.device.?.queueWaitIdle(manager.present_queue.handle);
         self.deinitExceptSwapchain();
 
-        self.handle = .null_handle;
+        self.handle = .null;
         self.* = initRecycle(manager, allocator, new_extent, old_handle, self.opts) catch |err| switch (err) {
             error.SwapchainCreationFailed => {
                 manager.device.?.destroySwapchainKHR(old_handle, null);
@@ -94,7 +94,7 @@ pub const Swapchain = struct {
             self.handle,
             std.math.maxInt(u64),
             self.next_image_acquired,
-            .null_handle,
+            .null,
         );
 
         std.mem.swap(vk.Semaphore, &self.swap_images[result.image_index].image_acquired, &self.next_image_acquired);
@@ -112,7 +112,7 @@ pub const Swapchain = struct {
         try current.waitForFence(self.manager);
         try self.manager.device.?.resetFences(&.{current.frame_fence});
 
-        const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe_bit = true }};
+        const wait_stage = [_]vk.PipelineStageFlags{.{ .top_of_pipe = true }};
         try self.manager.device.?.queueSubmit(self.manager.graphics_queue.handle, &.{.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = @ptrCast(&current.image_acquired),
@@ -135,7 +135,7 @@ pub const Swapchain = struct {
             self.handle,
             std.math.maxInt(u64),
             self.next_image_acquired,
-            .null_handle,
+            .null,
         );
 
         std.mem.swap(vk.Semaphore, &self.swap_images[result.image_index].image_acquired, &self.next_image_acquired);
@@ -167,7 +167,10 @@ pub const Swapchain = struct {
         const surface_format = try findSurfaceFormat(instance, manager.gpu, manager.surface, allocator);
         const present_mode = try findPresentMode(instance, manager.gpu, manager.surface, allocator, opts.present_mode);
 
-        var image_count = capabilities.min_image_count + 1;
+        // One image is being displayed by the compositor, one is queued and one is
+        // being rendered into; the fourth gives the loop slack, so a late frame
+        // does not turn into an acquire that blocks until the next vblank.
+        var image_count = capabilities.min_image_count + 2;
         if (capabilities.max_image_count > 0) {
             image_count = @min(image_count, capabilities.max_image_count);
         }
@@ -185,12 +188,12 @@ pub const Swapchain = struct {
             .image_color_space = surface_format.color_space,
             .image_extent = actual_extent,
             .image_array_layers = 1,
-            .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
+            .image_usage = .{ .color_attachment = true, .transfer_dst = true },
             .image_sharing_mode = sharing_mode,
             .queue_family_index_count = if (sharing_mode == .concurrent) queue_families.len else 0,
             .p_queue_family_indices = if (sharing_mode == .concurrent) &queue_families else undefined,
             .pre_transform = capabilities.current_transform,
-            .composite_alpha = .{ .opaque_bit_khr = true },
+            .composite_alpha = .{ .opaque_khr = true },
             .present_mode = present_mode,
             .clipped = .true,
             .old_swapchain = old_handle,
@@ -199,7 +202,7 @@ pub const Swapchain = struct {
         };
         errdefer device.destroySwapchainKHR(handle, null);
 
-        if (old_handle != .null_handle) {
+        if (old_handle != .null) {
             device.destroySwapchainKHR(old_handle, null);
         }
 
@@ -214,7 +217,7 @@ pub const Swapchain = struct {
         var next_image_acquired = try device.createSemaphore(&.{}, null);
         errdefer device.destroySemaphore(next_image_acquired, null);
 
-        const result = try device.acquireNextImageKHR(handle, std.math.maxInt(u64), next_image_acquired, .null_handle);
+        const result = try device.acquireNextImageKHR(handle, std.math.maxInt(u64), next_image_acquired, .null);
         if (result.result == .not_ready or result.result == .timeout) {
             return error.ImageAcquireFailed;
         }
@@ -271,7 +274,7 @@ pub const SwapImage = struct {
             .format = format,
             .components = .{ .r = .identity, .g = .identity, .b = .identity, .a = .identity },
             .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
+                .aspect_mask = .{ .color = true },
                 .base_mip_level = 0,
                 .level_count = 1,
                 .base_array_layer = 0,
@@ -286,7 +289,7 @@ pub const SwapImage = struct {
         const render_finished = try device.createSemaphore(&.{}, null);
         errdefer device.destroySemaphore(render_finished, null);
 
-        const frame_fence = try device.createFence(&.{ .flags = .{ .signaled_bit = true } }, null);
+        const frame_fence = try device.createFence(&.{ .flags = .{ .signaled = true } }, null);
         errdefer device.destroyFence(frame_fence, null);
 
         return .{

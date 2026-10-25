@@ -79,7 +79,7 @@ pub const AndroidHost = struct {
             .flags = .{},
             .window = @ptrCast(window),
         };
-        var surface: vk.SurfaceKHR = .null_handle;
+        var surface: vk.SurfaceKHR = .null;
         const result = create_fn(instance.handle, &create_info, null, &surface);
         if (result != .success) return error.SurfaceInitFailed;
         return surface;
